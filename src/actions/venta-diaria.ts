@@ -2,28 +2,37 @@
 
 import { chessGet } from "@/lib/chess"
 
+// Campos que devuelve Chess en dsReporteComprobantesApi.VentasResumen
 interface VentaLineaRaw {
-  fechaComprobante: string
-  idArticulo: number | string
-  dsArticulo: string
-  cantidadesCorCargo: number
-  cantidadesSinCargo: number
-  cantidadesTotal: number
-  cantidadesRechazo: number
-  anulado: string | boolean
-  idDocumento: string
-  dsDocumento: string
-  idCliente: number | string
-  nombreCliente: string
-  idSucursal: number | string
-  dsSucursal: string
-  idVendedor: number | string
-  dsVendedor: string
-  idDeposito: number | string
-  dsDeposito: string
+  fechaComprobate?: string   // nota: Chess lo escribe sin la "n" final
+  fechaComprobante?: string
+  idArticulo?: number | string
+  dsArticulo?: string
+  cantidadesCorCargo?: number
+  cantidadesSinCargo?: number
+  cantidadesTotal?: number
+  cantidadesRechazo?: number
+  anulado?: string | boolean
+  idDocumento?: string
+  dsDocumento?: string
+  idCliente?: number | string
+  nombreCliente?: string
+  idSucursal?: number | string
+  dsSucursal?: string
+  idVendedor?: number | string
+  dsVendedor?: string
+  idDeposito?: number | string
+  dsDeposito?: string
+  subtotalFinal?: number
+  idRechazo?: number
+  dsRechazo?: string
+  [key: string]: unknown
 }
 
 interface VentasResponse {
+  dsReporteComprobantesApi?: {
+    VentasResumen?: VentaLineaRaw[]
+  }
   ventas?: VentaLineaRaw[]
   Error?: { mensaje: string }
   [key: string]: unknown
@@ -70,46 +79,35 @@ export async function getVentaDiariaData(diasAtras: number = 30): Promise<VentaD
   const fechaHasta = formatDate(hoy)
   const diasRango = diffDays(fechaDesde, fechaHasta)
 
-  // Fetch all pages (1000 records per lote)
+  // Consultar Chess día por día (mismo patrón que mercosur-region-pampeana)
   const allLines: VentaLineaRaw[] = []
-  let lote = 1
-  let hasMore = true
 
   try {
-    while (hasMore) {
+    const currentDate = new Date(desde)
+    const endDate = new Date(hoy)
+
+    while (currentDate <= endDate) {
+      const fechaStr = formatDate(currentDate)
+
       const res = await chessGet<VentasResponse>("/ventas/", {
-        fechaDesde,
-        fechaHasta,
+        fechaDesde: fechaStr,
+        fechaHasta: fechaStr,
         detallado: true,
-        nroLote: lote,
       })
 
       if (res.Error) {
-        return {
-          skus: [],
-          fechaDesde,
-          fechaHasta,
-          diasRango,
-          totalRegistros: 0,
-          timestamp: new Date().toISOString(),
-          error: `Error API Chess: ${res.Error.mensaje || "Error desconocido"}`,
-        }
+        // Si un día falla, logueamos y seguimos con el siguiente
+        console.error(`Chess error dia ${fechaStr}:`, res.Error.mensaje)
+        currentDate.setDate(currentDate.getDate() + 1)
+        continue
       }
 
-      // The response structure may vary - look for the ventas array
       const ventas = extractVentas(res)
-
-      if (!ventas.length) {
-        hasMore = false
-      } else {
+      if (ventas.length > 0) {
         allLines.push(...ventas)
-        // If we got exactly 1000, there might be more
-        hasMore = ventas.length >= 1000
-        lote++
       }
 
-      // Safety limit: max 50 pages (50,000 records)
-      if (lote > 50) break
+      currentDate.setDate(currentDate.getDate() + 1)
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -121,6 +119,18 @@ export async function getVentaDiariaData(diasAtras: number = 30): Promise<VentaD
       totalRegistros: 0,
       timestamp: new Date().toISOString(),
       error: `Error conectando con Chess ERP: ${msg}`,
+    }
+  }
+
+  if (allLines.length === 0) {
+    return {
+      skus: [],
+      fechaDesde,
+      fechaHasta,
+      diasRango,
+      totalRegistros: 0,
+      timestamp: new Date().toISOString(),
+      error: "No se encontraron datos de ventas en el rango seleccionado",
     }
   }
 
@@ -143,7 +153,8 @@ export async function getVentaDiariaData(diasAtras: number = 30): Promise<VentaD
     const existing = byArticle.get(id)
     const qty = Number(line.cantidadesTotal) || 0
     const rechazo = Number(line.cantidadesRechazo) || 0
-    const fecha = line.fechaComprobante?.split("T")[0] || line.fechaComprobante
+    const fechaRaw = line.fechaComprobante || line.fechaComprobate || ""
+    const fecha = fechaRaw.split("T")[0]
 
     if (existing) {
       existing.totalBultos += qty
@@ -192,16 +203,23 @@ export async function getVentaDiariaData(diasAtras: number = 30): Promise<VentaD
   }
 }
 
-/** Extract ventas array from response (Chess API may nest it differently) */
+/** Extract ventas array from response - Chess usa dsReporteComprobantesApi.VentasResumen */
 function extractVentas(res: VentasResponse): VentaLineaRaw[] {
+  // Path principal: dsReporteComprobantesApi.VentasResumen
+  const resumen = res.dsReporteComprobantesApi?.VentasResumen
+  if (Array.isArray(resumen) && resumen.length > 0) return resumen
+
+  // Fallback: campo ventas directo
   if (Array.isArray(res.ventas)) return res.ventas
-  // Try to find the first array property in the response
+
+  // Fallback: buscar primer array con datos de artículos
   for (const val of Object.values(res)) {
-    if (Array.isArray(val) && val.length > 0 && val[0].idArticulo !== undefined) {
+    if (Array.isArray(val) && val.length > 0 && (val[0].idArticulo !== undefined || val[0].dsArticulo !== undefined)) {
       return val as VentaLineaRaw[]
     }
   }
-  // If the response itself is an array
+
+  // Fallback: response es array directo
   if (Array.isArray(res)) return res as unknown as VentaLineaRaw[]
   return []
 }
