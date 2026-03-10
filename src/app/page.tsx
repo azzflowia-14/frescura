@@ -12,6 +12,12 @@ export default function Home() {
         >
           Frescura / Vencimientos
         </Link>
+        <Link
+          href="/venta-diaria"
+          className="text-sm font-medium px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+        >
+          Venta Diaria
+        </Link>
         <span className="text-xs text-muted-foreground">|</span>
         <span className="text-xs text-muted-foreground">Explorador de base de datos WMS</span>
       </div>
