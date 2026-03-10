@@ -9,6 +9,8 @@ export interface ContenedorDetail {
   diasRestantes: number
   unidades: number
   bultos: number
+  fechaIngreso: string
+  diasEnDeposito: number
 }
 
 export interface FrescuraResumen {
@@ -23,6 +25,8 @@ export interface FrescuraResumen {
   bultosTotal: number
   lotes: number
   apto: string
+  fechaIngreso: string
+  diasEnDeposito: number
   contenedores: ContenedorDetail[]
 }
 
@@ -30,6 +34,7 @@ export interface FrescuraData {
   resumen: FrescuraResumen[]
   totales: {
     productos: number
+    tresMeses: number
     vencidos: number
     criticos: number
     urgentes: number
@@ -46,6 +51,7 @@ export async function getFrescuraData(): Promise<FrescuraData> {
     Articulo: string
     Descripción: string
     Vencimiento: string
+    Ingreso: string
     Cantidad: number
     Lote: string
     Apto: string
@@ -56,6 +62,7 @@ export async function getFrescuraData(): Promise<FrescuraData> {
       s.Articulo,
       s.Descripción,
       s.Vencimiento,
+      s.Ingreso,
       s.Cantidad,
       s.Lote,
       s.Apto,
@@ -84,6 +91,8 @@ export async function getFrescuraData(): Promise<FrescuraData> {
     diasRestantes: number
     unidadesProxVenc: number
     apto: string
+    fechaIngreso: string
+    diasEnDeposito: number
     contenedores: ContenedorDetail[]
   }>()
 
@@ -99,6 +108,10 @@ export async function getFrescuraData(): Promise<FrescuraData> {
     const bultos = upb > 1 ? Math.round((unidades / upb) * 100) / 100 : unidades
     const vencStr = venc.toISOString().slice(0, 10)
 
+    const ingreso = parseDate(r.Ingreso?.trim())
+    const ingresoStr = ingreso ? ingreso.toISOString().slice(0, 10) : ""
+    const diasDep = ingreso ? Math.ceil((hoy.getTime() - ingreso.getTime()) / (1000 * 60 * 60 * 24)) : 0
+
     const contDetail: ContenedorDetail = {
       contenedor: r.Contenedor?.trim() || "-",
       lote: r.Lote?.trim() || "-",
@@ -106,6 +119,8 @@ export async function getFrescuraData(): Promise<FrescuraData> {
       diasRestantes: dias,
       unidades,
       bultos,
+      fechaIngreso: ingresoStr,
+      diasEnDeposito: diasDep,
     }
 
     const existing = artMap.get(articulo)
@@ -121,6 +136,11 @@ export async function getFrescuraData(): Promise<FrescuraData> {
       } else if (dias === existing.diasRestantes) {
         existing.unidadesProxVenc += unidades
       }
+      // Keep earliest ingreso date
+      if (diasDep > existing.diasEnDeposito) {
+        existing.fechaIngreso = ingresoStr
+        existing.diasEnDeposito = diasDep
+      }
     } else {
       artMap.set(articulo, {
         descripcion: r.Descripción?.trim() || "",
@@ -131,6 +151,8 @@ export async function getFrescuraData(): Promise<FrescuraData> {
         diasRestantes: dias,
         unidadesProxVenc: unidades,
         apto: r.Apto?.trim() || "",
+        fechaIngreso: ingresoStr,
+        diasEnDeposito: diasDep,
         contenedores: [contDetail],
       })
     }
@@ -151,6 +173,8 @@ export async function getFrescuraData(): Promise<FrescuraData> {
         bultosTotal: upb > 1 ? Math.round((d.unidadesTotal / upb) * 100) / 100 : d.unidadesTotal,
         lotes: d.lotes.size,
         apto: d.apto,
+        fechaIngreso: d.fechaIngreso,
+        diasEnDeposito: d.diasEnDeposito,
         contenedores: d.contenedores.sort((a, b) => a.diasRestantes - b.diasRestantes),
       }
     })
@@ -158,6 +182,7 @@ export async function getFrescuraData(): Promise<FrescuraData> {
 
   const totales = {
     productos: resumen.length,
+    tresMeses: resumen.filter((r) => r.diasRestantes <= 90).length,
     vencidos: resumen.filter((r) => r.diasRestantes < 0).length,
     criticos: resumen.filter((r) => r.diasRestantes >= 0 && r.diasRestantes <= 15).length,
     urgentes: resumen.filter((r) => r.diasRestantes > 15 && r.diasRestantes <= 30).length,

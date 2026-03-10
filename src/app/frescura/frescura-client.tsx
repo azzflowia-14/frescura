@@ -22,7 +22,7 @@ export function FrescuraClient() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [search, setSearch] = useState("")
-  const [filtro, setFiltro] = useState<"todos" | "vencidos" | "criticos" | "urgentes" | "atencion" | "ok">("todos")
+  const [filtro, setFiltro] = useState<"todos" | "3meses" | "vencidos" | "criticos" | "urgentes" | "atencion" | "ok">("3meses")
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -55,7 +55,8 @@ export function FrescuraClient() {
       r.descripcion.toLowerCase().includes(search.toLowerCase())
 
     let matchFiltro = true
-    if (filtro === "vencidos") matchFiltro = r.diasRestantes < 0
+    if (filtro === "3meses") matchFiltro = r.diasRestantes <= 90
+    else if (filtro === "vencidos") matchFiltro = r.diasRestantes < 0
     else if (filtro === "criticos") matchFiltro = r.diasRestantes >= 0 && r.diasRestantes <= 15
     else if (filtro === "urgentes") matchFiltro = r.diasRestantes > 15 && r.diasRestantes <= 30
     else if (filtro === "atencion") matchFiltro = r.diasRestantes > 30 && r.diasRestantes <= 60
@@ -97,7 +98,7 @@ export function FrescuraClient() {
       <main className="mx-auto max-w-[1600px] px-4 py-6 space-y-6">
         {error && (
           <Card className="border-red-800">
-            <CardContent className="py-4 text-red-400">{error}</CardContent>
+            <CardContent className="py-4 text-red-600">{error}</CardContent>
           </Card>
         )}
 
@@ -111,18 +112,19 @@ export function FrescuraClient() {
         ) : data ? (
           <>
             {/* KPI Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              <KpiCard label="Productos" value={data.totales.productos} active={filtro === "todos"} onClick={() => setFiltro("todos")} color="border-zinc-600" />
-              <KpiCard label="Vencidos" value={data.totales.vencidos} active={filtro === "vencidos"} onClick={() => setFiltro("vencidos")} color="border-red-600" bgColor="bg-red-950/30" textColor="text-red-400" />
-              <KpiCard label="Críticos (0-15d)" value={data.totales.criticos} active={filtro === "criticos"} onClick={() => setFiltro("criticos")} color="border-orange-600" bgColor="bg-orange-950/30" textColor="text-orange-400" />
-              <KpiCard label="Urgentes (16-30d)" value={data.totales.urgentes} active={filtro === "urgentes"} onClick={() => setFiltro("urgentes")} color="border-amber-600" bgColor="bg-amber-950/30" textColor="text-amber-400" />
-              <KpiCard label="Atención (31-60d)" value={data.totales.atencion} active={filtro === "atencion"} onClick={() => setFiltro("atencion")} color="border-yellow-600" bgColor="bg-yellow-950/30" textColor="text-yellow-400" />
-              <KpiCard label="OK (+60d)" value={data.totales.ok} active={filtro === "ok"} onClick={() => setFiltro("ok")} color="border-emerald-600" bgColor="bg-emerald-950/30" textColor="text-emerald-400" />
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+              <KpiCard label="Todos" value={data.totales.productos} active={filtro === "todos"} onClick={() => setFiltro("todos")} color="border-gray-400" bgColor="bg-gray-50" textColor="text-gray-900" />
+              <KpiCard label="Próx. 3 meses" value={data.totales.tresMeses} active={filtro === "3meses"} onClick={() => setFiltro("3meses")} color="border-blue-500" bgColor="bg-blue-50" textColor="text-blue-700" />
+              <KpiCard label="Vencidos" value={data.totales.vencidos} active={filtro === "vencidos"} onClick={() => setFiltro("vencidos")} color="border-red-500" bgColor="bg-red-50" textColor="text-red-700" />
+              <KpiCard label="Críticos (0-15d)" value={data.totales.criticos} active={filtro === "criticos"} onClick={() => setFiltro("criticos")} color="border-red-400" bgColor="bg-red-50" textColor="text-red-600" />
+              <KpiCard label="Urgentes (16-30d)" value={data.totales.urgentes} active={filtro === "urgentes"} onClick={() => setFiltro("urgentes")} color="border-yellow-500" bgColor="bg-yellow-50" textColor="text-yellow-700" />
+              <KpiCard label="Atención (31-60d)" value={data.totales.atencion} active={filtro === "atencion"} onClick={() => setFiltro("atencion")} color="border-yellow-400" bgColor="bg-yellow-50" textColor="text-yellow-600" />
+              <KpiCard label="OK (+60d)" value={data.totales.ok} active={filtro === "ok"} onClick={() => setFiltro("ok")} color="border-green-500" bgColor="bg-green-50" textColor="text-green-700" />
             </div>
 
             {/* Debug info */}
             {data.debug && (
-              <div className="text-xs text-amber-400 bg-amber-950/30 border border-amber-800 rounded-md px-3 py-2 font-mono">
+              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-300 rounded-md px-3 py-2 font-mono">
                 {data.debug}
               </div>
             )}
@@ -152,6 +154,8 @@ export function FrescuraClient() {
                           <TableHead className="text-right">Bultos Total</TableHead>
                           <TableHead className="text-right">Unid. Total</TableHead>
                           <TableHead className="text-center">Ud/Bulto</TableHead>
+                          <TableHead className="text-center">Ingreso</TableHead>
+                          <TableHead className="text-center">Días Dep.</TableHead>
                           <TableHead className="text-center">Lotes</TableHead>
                           <TableHead className="text-center">Apto</TableHead>
                         </TableRow>
@@ -182,6 +186,8 @@ export function FrescuraClient() {
                                 <TableCell className="text-right font-semibold text-sm">{fmtNum(r.bultosTotal)}</TableCell>
                                 <TableCell className="text-right text-sm text-muted-foreground">{fmtNum(r.unidadesTotal)}</TableCell>
                                 <TableCell className="text-center text-xs text-muted-foreground">{r.unidadesPorBulto > 1 ? r.unidadesPorBulto : <span className="text-red-400">1?</span>}</TableCell>
+                                <TableCell className="text-center text-sm font-mono">{formatDate(r.fechaIngreso)}</TableCell>
+                                <TableCell className="text-center text-sm font-semibold">{r.diasEnDeposito > 0 ? r.diasEnDeposito : "-"}</TableCell>
                                 <TableCell className="text-center text-sm">{r.lotes}</TableCell>
                                 <TableCell className="text-center">
                                   <Badge variant={r.apto === "SI" ? "default" : "destructive"} className="text-xs">{r.apto || "-"}</Badge>
@@ -190,8 +196,8 @@ export function FrescuraClient() {
 
                               {/* Expanded: contenedores detail */}
                               {isExpanded && (
-                                <TableRow key={`detail-${r.articulo}`} className="bg-zinc-900/50">
-                                  <TableCell colSpan={13} className="p-0">
+                                <TableRow key={`detail-${r.articulo}`} className="bg-gray-50">
+                                  <TableCell colSpan={15} className="p-0">
                                     <div className="px-8 py-3 border-y border-border/50">
                                       <p className="text-xs font-semibold text-muted-foreground mb-2">
                                         Detalle de contenedores — {r.articulo} {r.descripcion}
@@ -205,6 +211,8 @@ export function FrescuraClient() {
                                             <TableHead className="text-xs text-center">Días</TableHead>
                                             <TableHead className="text-xs text-right">Bultos</TableHead>
                                             <TableHead className="text-xs text-right">Unidades</TableHead>
+                                            <TableHead className="text-xs text-center">Ingreso</TableHead>
+                                            <TableHead className="text-xs text-center">Días Dep.</TableHead>
                                           </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -218,6 +226,8 @@ export function FrescuraClient() {
                                               </TableCell>
                                               <TableCell className="text-xs text-right font-semibold py-1">{fmtNum(c.bultos)}</TableCell>
                                               <TableCell className="text-xs text-right text-muted-foreground py-1">{fmtNum(c.unidades)}</TableCell>
+                                              <TableCell className="text-xs text-center font-mono py-1">{formatDate(c.fechaIngreso)}</TableCell>
+                                              <TableCell className="text-xs text-center py-1">{c.diasEnDeposito > 0 ? c.diasEnDeposito : "-"}</TableCell>
                                             </TableRow>
                                           ))}
                                         </TableBody>
@@ -231,7 +241,7 @@ export function FrescuraClient() {
                         })}
                         {filtered.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
+                            <TableCell colSpan={15} className="text-center py-8 text-muted-foreground">
                               No se encontraron productos
                             </TableCell>
                           </TableRow>
@@ -271,26 +281,26 @@ function KpiCard({ label, value, active, onClick, color, bgColor, textColor }: {
 
 function StatusBadge({ dias }: { dias: number }) {
   if (dias < 0) return <Badge className="bg-red-600 text-white text-xs">VENCIDO</Badge>
-  if (dias <= 15) return <Badge className="bg-orange-600 text-white text-xs">CRÍTICO</Badge>
-  if (dias <= 30) return <Badge className="bg-amber-600 text-black text-xs">URGENTE</Badge>
-  if (dias <= 60) return <Badge className="bg-yellow-500 text-black text-xs">ATENCIÓN</Badge>
-  return <Badge className="bg-emerald-600 text-white text-xs">OK</Badge>
+  if (dias <= 15) return <Badge className="bg-red-500 text-white text-xs">CRÍTICO</Badge>
+  if (dias <= 30) return <Badge className="bg-yellow-400 text-black text-xs">URGENTE</Badge>
+  if (dias <= 60) return <Badge className="bg-yellow-300 text-black text-xs">ATENCIÓN</Badge>
+  return <Badge className="bg-green-500 text-white text-xs">OK</Badge>
 }
 
 // ── Helpers ───────────────────────────────────────────────────────
 
 function diasColor(dias: number): string {
-  if (dias < 0) return "text-red-500"
-  if (dias <= 15) return "text-orange-500"
-  if (dias <= 30) return "text-amber-500"
+  if (dias < 0) return "text-red-700"
+  if (dias <= 15) return "text-red-600"
+  if (dias <= 30) return "text-yellow-600"
   if (dias <= 60) return "text-yellow-500"
-  return "text-emerald-500"
+  return "text-green-600"
 }
 
 function rowBg(dias: number): string {
-  if (dias < 0) return "bg-red-950/10"
-  if (dias <= 15) return "bg-orange-950/10"
-  if (dias <= 30) return "bg-amber-950/10"
+  if (dias < 0) return "bg-red-100"
+  if (dias <= 15) return "bg-red-50"
+  if (dias <= 30) return "bg-yellow-50"
   return ""
 }
 
