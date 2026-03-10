@@ -57,7 +57,11 @@ export function VentaDiariaClient() {
       setLoading(true)
       setError("")
       const result = await getVentaDiariaData(dias)
-      setData(result)
+      if (result.error) {
+        setError(result.error)
+      } else {
+        setData(result)
+      }
       setLastUpdate(new Date())
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))

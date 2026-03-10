@@ -48,6 +48,7 @@ export interface VentaDiariaData {
   diasRango: number
   totalRegistros: number
   timestamp: string
+  error?: string
 }
 
 function formatDate(d: Date): string {
@@ -74,30 +75,53 @@ export async function getVentaDiariaData(diasAtras: number = 30): Promise<VentaD
   let lote = 1
   let hasMore = true
 
-  while (hasMore) {
-    const res = await chessGet<VentasResponse>("/ventas/", {
+  try {
+    while (hasMore) {
+      const res = await chessGet<VentasResponse>("/ventas/", {
+        fechaDesde,
+        fechaHasta,
+        detallado: true,
+        nroLote: lote,
+      })
+
+      if (res.Error) {
+        return {
+          skus: [],
+          fechaDesde,
+          fechaHasta,
+          diasRango,
+          totalRegistros: 0,
+          timestamp: new Date().toISOString(),
+          error: `Error API Chess: ${res.Error.mensaje || "Error desconocido"}`,
+        }
+      }
+
+      // The response structure may vary - look for the ventas array
+      const ventas = extractVentas(res)
+
+      if (!ventas.length) {
+        hasMore = false
+      } else {
+        allLines.push(...ventas)
+        // If we got exactly 1000, there might be more
+        hasMore = ventas.length >= 1000
+        lote++
+      }
+
+      // Safety limit: max 50 pages (50,000 records)
+      if (lote > 50) break
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return {
+      skus: [],
       fechaDesde,
       fechaHasta,
-      detallado: true,
-      nroLote: lote,
-    })
-
-    if (res.Error) throw new Error(res.Error.mensaje || "Error en API Chess")
-
-    // The response structure may vary - look for the ventas array
-    const ventas = extractVentas(res)
-
-    if (!ventas.length) {
-      hasMore = false
-    } else {
-      allLines.push(...ventas)
-      // If we got exactly 1000, there might be more
-      hasMore = ventas.length >= 1000
-      lote++
+      diasRango,
+      totalRegistros: 0,
+      timestamp: new Date().toISOString(),
+      error: `Error conectando con Chess ERP: ${msg}`,
     }
-
-    // Safety limit: max 50 pages (50,000 records)
-    if (lote > 50) break
   }
 
   // Filter out anulados
