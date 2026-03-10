@@ -2,43 +2,45 @@
 
 import { query } from "@/lib/db"
 
-export interface FrescuraItem {
-  articulo: string
-  descripcion: string
+export interface ContenedorDetail {
+  contenedor: string
   lote: string
   vencimiento: string
   diasRestantes: number
-  cantidad: number
-  apto: string
-  contenedor: string
+  unidades: number
+  bultos: number
 }
 
 export interface FrescuraResumen {
   articulo: string
   descripcion: string
+  unidadesPorBulto: number
   vencimientoProximo: string
   diasRestantes: number
-  cantidadProxVenc: number
-  cantidadTotal: number
+  unidadesProxVenc: number
+  bultosProxVenc: number
+  unidadesTotal: number
+  bultosTotal: number
   lotes: number
   apto: string
+  contenedores: ContenedorDetail[]
 }
 
 export interface FrescuraData {
-  items: FrescuraItem[]
   resumen: FrescuraResumen[]
   totales: {
     productos: number
     vencidos: number
-    criticos: number   // 0-15 dias
-    urgentes: number   // 16-30 dias
-    atencion: number   // 31-60 dias
-    ok: number         // >60 dias
+    criticos: number
+    urgentes: number
+    atencion: number
+    ok: number
   }
   timestamp: string
 }
 
 export async function getFrescuraData(): Promise<FrescuraData> {
+  // Query stock + join with Articulo for UnidadesBulto conversion
   const rows = await query<{
     Articulo: string
     Descripción: string
@@ -47,87 +49,107 @@ export async function getFrescuraData(): Promise<FrescuraData> {
     Lote: string
     Apto: string
     Contenedor: string
+    UnidadesBulto: number | null
   }>(`
     SELECT
-      Articulo,
-      Descripción,
-      Vencimiento,
-      Cantidad,
-      Lote,
-      Apto,
-      Contenedor
-    FROM dbo.ConsultaStock
-    WHERE Vencimiento IS NOT NULL AND Vencimiento <> ''
-    ORDER BY Articulo, Vencimiento
+      s.Articulo,
+      s.Descripción,
+      s.Vencimiento,
+      s.Cantidad,
+      s.Lote,
+      s.Apto,
+      s.Contenedor,
+      a.ArticuloUnidadesBulto AS UnidadesBulto
+    FROM dbo.ConsultaStock s
+    LEFT JOIN dbo.Articulo a
+      ON LTRIM(RTRIM(s.Articulo)) = LTRIM(RTRIM(a.ArticuloCod))
+    WHERE s.Vencimiento IS NOT NULL AND s.Vencimiento <> ''
+    ORDER BY s.Articulo, s.Vencimiento
   `)
 
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
 
-  // Parse items
-  const items: FrescuraItem[] = rows.map((r) => {
-    const venc = parseDate(r.Vencimiento?.trim())
-    const dias = venc ? Math.ceil((venc.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24)) : -9999
-    return {
-      articulo: r.Articulo?.trim() || "",
-      descripcion: r.Descripción?.trim() || "",
-      lote: r.Lote?.trim() || "",
-      vencimiento: venc ? venc.toISOString().slice(0, 10) : "",
-      diasRestantes: dias,
-      cantidad: r.Cantidad || 0,
-      apto: r.Apto?.trim() || "",
-      contenedor: r.Contenedor?.trim() || "",
-    }
-  }).filter((i) => i.vencimiento && i.cantidad > 0)
-
-  // Group by articulo: find próximo vencimiento
+  // Group by articulo
   const artMap = new Map<string, {
     descripcion: string
+    unidadesPorBulto: number
     lotes: Set<string>
-    cantidadTotal: number
+    unidadesTotal: number
     vencimientoProximo: string
     diasRestantes: number
-    cantidadProxVenc: number
+    unidadesProxVenc: number
     apto: string
+    contenedores: ContenedorDetail[]
   }>()
 
-  for (const item of items) {
-    const existing = artMap.get(item.articulo)
+  for (const r of rows) {
+    const articulo = r.Articulo?.trim() || ""
+    const venc = parseDate(r.Vencimiento?.trim())
+    if (!venc || !articulo) continue
+    const dias = Math.ceil((venc.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24))
+    const unidades = r.Cantidad || 0
+    if (unidades <= 0) continue
+
+    const upb = r.UnidadesBulto && r.UnidadesBulto > 0 ? r.UnidadesBulto : 1
+    const bultos = upb > 1 ? Math.round((unidades / upb) * 100) / 100 : unidades
+    const vencStr = venc.toISOString().slice(0, 10)
+
+    const contDetail: ContenedorDetail = {
+      contenedor: r.Contenedor?.trim() || "-",
+      lote: r.Lote?.trim() || "-",
+      vencimiento: vencStr,
+      diasRestantes: dias,
+      unidades,
+      bultos,
+    }
+
+    const existing = artMap.get(articulo)
     if (existing) {
-      existing.cantidadTotal += item.cantidad
-      existing.lotes.add(item.lote)
-      if (item.diasRestantes < existing.diasRestantes) {
-        existing.vencimientoProximo = item.vencimiento
-        existing.diasRestantes = item.diasRestantes
-        existing.cantidadProxVenc = item.cantidad
-        existing.apto = item.apto
-      } else if (item.diasRestantes === existing.diasRestantes) {
-        existing.cantidadProxVenc += item.cantidad
+      existing.unidadesTotal += unidades
+      existing.lotes.add(r.Lote?.trim() || "")
+      existing.contenedores.push(contDetail)
+      if (dias < existing.diasRestantes) {
+        existing.vencimientoProximo = vencStr
+        existing.diasRestantes = dias
+        existing.unidadesProxVenc = unidades
+        existing.apto = r.Apto?.trim() || ""
+      } else if (dias === existing.diasRestantes) {
+        existing.unidadesProxVenc += unidades
       }
     } else {
-      artMap.set(item.articulo, {
-        descripcion: item.descripcion,
-        lotes: new Set([item.lote]),
-        cantidadTotal: item.cantidad,
-        vencimientoProximo: item.vencimiento,
-        diasRestantes: item.diasRestantes,
-        cantidadProxVenc: item.cantidad,
-        apto: item.apto,
+      artMap.set(articulo, {
+        descripcion: r.Descripción?.trim() || "",
+        unidadesPorBulto: upb,
+        lotes: new Set([r.Lote?.trim() || ""]),
+        unidadesTotal: unidades,
+        vencimientoProximo: vencStr,
+        diasRestantes: dias,
+        unidadesProxVenc: unidades,
+        apto: r.Apto?.trim() || "",
+        contenedores: [contDetail],
       })
     }
   }
 
   const resumen: FrescuraResumen[] = Array.from(artMap.entries())
-    .map(([articulo, data]) => ({
-      articulo,
-      descripcion: data.descripcion,
-      vencimientoProximo: data.vencimientoProximo,
-      diasRestantes: data.diasRestantes,
-      cantidadProxVenc: data.cantidadProxVenc,
-      cantidadTotal: data.cantidadTotal,
-      lotes: data.lotes.size,
-      apto: data.apto,
-    }))
+    .map(([articulo, d]) => {
+      const upb = d.unidadesPorBulto
+      return {
+        articulo,
+        descripcion: d.descripcion,
+        unidadesPorBulto: upb,
+        vencimientoProximo: d.vencimientoProximo,
+        diasRestantes: d.diasRestantes,
+        unidadesProxVenc: d.unidadesProxVenc,
+        bultosProxVenc: upb > 1 ? Math.round((d.unidadesProxVenc / upb) * 100) / 100 : d.unidadesProxVenc,
+        unidadesTotal: d.unidadesTotal,
+        bultosTotal: upb > 1 ? Math.round((d.unidadesTotal / upb) * 100) / 100 : d.unidadesTotal,
+        lotes: d.lotes.size,
+        apto: d.apto,
+        contenedores: d.contenedores.sort((a, b) => a.diasRestantes - b.diasRestantes),
+      }
+    })
     .sort((a, b) => a.diasRestantes - b.diasRestantes)
 
   const totales = {
@@ -139,24 +161,15 @@ export async function getFrescuraData(): Promise<FrescuraData> {
     ok: resumen.filter((r) => r.diasRestantes > 60).length,
   }
 
-  return {
-    items,
-    resumen,
-    totales,
-    timestamp: new Date().toISOString(),
-  }
+  return { resumen, totales, timestamp: new Date().toISOString() }
 }
 
-// Parse date from various formats (dd/mm/yyyy, yyyy-mm-dd, etc)
 function parseDate(str: string): Date | null {
   if (!str) return null
-  // dd/mm/yyyy
   const dmy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
   if (dmy) return new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]))
-  // yyyy-mm-dd
   const iso = str.match(/^(\d{4})-(\d{2})-(\d{2})/)
   if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]))
-  // Try native parse
   const d = new Date(str)
   return isNaN(d.getTime()) ? null : d
 }

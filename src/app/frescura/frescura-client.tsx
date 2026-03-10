@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { getFrescuraData, type FrescuraData, type FrescuraResumen } from "@/actions/frescura"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -16,13 +16,6 @@ import {
 } from "@/components/ui/table"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 
 export function FrescuraClient() {
   const [data, setData] = useState<FrescuraData | null>(null)
@@ -32,6 +25,7 @@ export function FrescuraClient() {
   const [filtro, setFiltro] = useState<"todos" | "vencidos" | "criticos" | "urgentes" | "atencion" | "ok">("todos")
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
     try {
@@ -46,9 +40,7 @@ export function FrescuraClient() {
     }
   }, [])
 
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+  useEffect(() => { loadData() }, [loadData])
 
   useEffect(() => {
     if (!autoRefresh) return
@@ -56,7 +48,6 @@ export function FrescuraClient() {
     return () => clearInterval(interval)
   }, [autoRefresh, loadData])
 
-  // Filter logic
   const filtered = (data?.resumen || []).filter((r) => {
     const matchSearch =
       !search ||
@@ -73,38 +64,31 @@ export function FrescuraClient() {
     return matchSearch && matchFiltro
   })
 
+  function toggleExpand(articulo: string) {
+    setExpanded(expanded === articulo ? null : articulo)
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border sticky top-0 z-50 bg-background/95 backdrop-blur">
         <div className="mx-auto max-w-[1600px] px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <a href="/" className="text-muted-foreground hover:text-foreground text-sm">
-              ← Explorador
-            </a>
+            <a href="/" className="text-muted-foreground hover:text-foreground text-sm">← Explorador</a>
             <h1 className="text-2xl font-bold tracking-tight">Frescura</h1>
-            <Badge variant="outline" className="text-xs">
-              Vencimientos
-            </Badge>
+            <Badge variant="outline" className="text-xs">Vencimientos</Badge>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 border rounded-md px-2 py-1">
               <label className="text-xs text-muted-foreground">Auto-refresh:</label>
-              <input
-                type="checkbox"
-                checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
-                className="accent-primary"
-              />
+              <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} className="accent-primary" />
               {autoRefresh && <span className="text-xs text-muted-foreground">60s</span>}
             </div>
             <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
               {loading ? "Cargando..." : "Refrescar"}
             </Button>
             {lastUpdate && (
-              <span className="text-xs text-muted-foreground">
-                {lastUpdate.toLocaleTimeString("es-AR")}
-              </span>
+              <span className="text-xs text-muted-foreground">{lastUpdate.toLocaleTimeString("es-AR")}</span>
             )}
           </div>
         </div>
@@ -119,10 +103,8 @@ export function FrescuraClient() {
 
         {loading && !data ? (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-24" />
-              ))}
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
             </div>
             <Skeleton className="h-96" />
           </div>
@@ -130,134 +112,126 @@ export function FrescuraClient() {
           <>
             {/* KPI Cards */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              <KpiCard
-                label="Productos"
-                value={data.totales.productos}
-                active={filtro === "todos"}
-                onClick={() => setFiltro("todos")}
-                color="border-zinc-600"
-              />
-              <KpiCard
-                label="Vencidos"
-                value={data.totales.vencidos}
-                active={filtro === "vencidos"}
-                onClick={() => setFiltro("vencidos")}
-                color="border-red-600"
-                bgColor="bg-red-950/30"
-                textColor="text-red-400"
-              />
-              <KpiCard
-                label="Críticos (0-15d)"
-                value={data.totales.criticos}
-                active={filtro === "criticos"}
-                onClick={() => setFiltro("criticos")}
-                color="border-orange-600"
-                bgColor="bg-orange-950/30"
-                textColor="text-orange-400"
-              />
-              <KpiCard
-                label="Urgentes (16-30d)"
-                value={data.totales.urgentes}
-                active={filtro === "urgentes"}
-                onClick={() => setFiltro("urgentes")}
-                color="border-amber-600"
-                bgColor="bg-amber-950/30"
-                textColor="text-amber-400"
-              />
-              <KpiCard
-                label="Atención (31-60d)"
-                value={data.totales.atencion}
-                active={filtro === "atencion"}
-                onClick={() => setFiltro("atencion")}
-                color="border-yellow-600"
-                bgColor="bg-yellow-950/30"
-                textColor="text-yellow-400"
-              />
-              <KpiCard
-                label="OK (+60d)"
-                value={data.totales.ok}
-                active={filtro === "ok"}
-                onClick={() => setFiltro("ok")}
-                color="border-emerald-600"
-                bgColor="bg-emerald-950/30"
-                textColor="text-emerald-400"
-              />
+              <KpiCard label="Productos" value={data.totales.productos} active={filtro === "todos"} onClick={() => setFiltro("todos")} color="border-zinc-600" />
+              <KpiCard label="Vencidos" value={data.totales.vencidos} active={filtro === "vencidos"} onClick={() => setFiltro("vencidos")} color="border-red-600" bgColor="bg-red-950/30" textColor="text-red-400" />
+              <KpiCard label="Críticos (0-15d)" value={data.totales.criticos} active={filtro === "criticos"} onClick={() => setFiltro("criticos")} color="border-orange-600" bgColor="bg-orange-950/30" textColor="text-orange-400" />
+              <KpiCard label="Urgentes (16-30d)" value={data.totales.urgentes} active={filtro === "urgentes"} onClick={() => setFiltro("urgentes")} color="border-amber-600" bgColor="bg-amber-950/30" textColor="text-amber-400" />
+              <KpiCard label="Atención (31-60d)" value={data.totales.atencion} active={filtro === "atencion"} onClick={() => setFiltro("atencion")} color="border-yellow-600" bgColor="bg-yellow-950/30" textColor="text-yellow-400" />
+              <KpiCard label="OK (+60d)" value={data.totales.ok} active={filtro === "ok"} onClick={() => setFiltro("ok")} color="border-emerald-600" bgColor="bg-emerald-950/30" textColor="text-emerald-400" />
             </div>
 
-            {/* Search + filters */}
+            {/* Search */}
             <div className="flex items-center gap-3">
-              <Input
-                placeholder="Buscar artículo o descripción..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="max-w-sm"
-              />
-              <span className="text-sm text-muted-foreground">
-                {filtered.length} de {data.resumen.length} productos
-              </span>
+              <Input placeholder="Buscar artículo o descripción..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+              <span className="text-sm text-muted-foreground">{filtered.length} de {data.resumen.length} productos</span>
             </div>
 
             {/* Main table */}
             <Card>
               <CardContent className="p-0">
                 <ScrollArea className="max-h-[calc(100vh-340px)]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-12 text-center">#</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead>Artículo</TableHead>
-                        <TableHead>Descripción</TableHead>
-                        <TableHead className="text-center">Días</TableHead>
-                        <TableHead className="text-center">Vencimiento</TableHead>
-                        <TableHead className="text-right">Bultos Prox. Venc.</TableHead>
-                        <TableHead className="text-right">Bultos Total</TableHead>
-                        <TableHead className="text-center">Lotes</TableHead>
-                        <TableHead className="text-center">Apto</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filtered.map((r, i) => (
-                        <TableRow key={`${r.articulo}-${i}`} className={rowBg(r.diasRestantes)}>
-                          <TableCell className="text-center text-xs text-muted-foreground">
-                            {i + 1}
-                          </TableCell>
-                          <TableCell>
-                            <StatusBadge dias={r.diasRestantes} />
-                          </TableCell>
-                          <TableCell className="font-mono text-sm">{r.articulo}</TableCell>
-                          <TableCell className="text-sm max-w-[300px] truncate">{r.descripcion}</TableCell>
-                          <TableCell className="text-center">
-                            <span className={`font-bold text-lg ${diasColor(r.diasRestantes)}`}>
-                              {r.diasRestantes}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-center text-sm font-mono">
-                            {formatDate(r.vencimientoProximo)}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-sm">
-                            {r.cantidadProxVenc.toLocaleString("es-AR")}
-                          </TableCell>
-                          <TableCell className="text-right text-sm text-muted-foreground">
-                            {r.cantidadTotal.toLocaleString("es-AR")}
-                          </TableCell>
-                          <TableCell className="text-center text-sm">{r.lotes}</TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant={r.apto === "SI" ? "default" : "destructive"} className="text-xs">
-                              {r.apto || "-"}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {filtered.length === 0 && (
+                  <div className="min-w-max">
+                    <Table>
+                      <TableHeader>
                         <TableRow>
-                          <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                            No se encontraron productos
-                          </TableCell>
+                          <TableHead className="w-10 text-center">#</TableHead>
+                          <TableHead className="w-24">Estado</TableHead>
+                          <TableHead>Artículo</TableHead>
+                          <TableHead>Descripción</TableHead>
+                          <TableHead className="text-center">Días</TableHead>
+                          <TableHead className="text-center">Vencimiento</TableHead>
+                          <TableHead className="text-right">Bultos Prox.</TableHead>
+                          <TableHead className="text-right">Unid. Prox.</TableHead>
+                          <TableHead className="text-right">Bultos Total</TableHead>
+                          <TableHead className="text-right">Unid. Total</TableHead>
+                          <TableHead className="text-center">Ud/Bulto</TableHead>
+                          <TableHead className="text-center">Lotes</TableHead>
+                          <TableHead className="text-center">Apto</TableHead>
                         </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {filtered.map((r, i) => {
+                          const isExpanded = expanded === r.articulo
+                          return (
+                            <>
+                              <TableRow
+                                key={`row-${r.articulo}-${i}`}
+                                className={`${rowBg(r.diasRestantes)} cursor-pointer hover:bg-accent/50 transition-colors`}
+                                onClick={() => toggleExpand(r.articulo)}
+                              >
+                                <TableCell className="text-center text-xs text-muted-foreground">{i + 1}</TableCell>
+                                <TableCell><StatusBadge dias={r.diasRestantes} /></TableCell>
+                                <TableCell className="font-mono text-sm">
+                                  <span className="mr-1 text-muted-foreground">{isExpanded ? "▼" : "▶"}</span>
+                                  {r.articulo}
+                                </TableCell>
+                                <TableCell className="text-sm max-w-[250px] truncate">{r.descripcion}</TableCell>
+                                <TableCell className="text-center">
+                                  <span className={`font-bold text-lg ${diasColor(r.diasRestantes)}`}>{r.diasRestantes}</span>
+                                </TableCell>
+                                <TableCell className="text-center text-sm font-mono">{formatDate(r.vencimientoProximo)}</TableCell>
+                                <TableCell className="text-right font-semibold text-sm">{fmtNum(r.bultosProxVenc)}</TableCell>
+                                <TableCell className="text-right text-sm text-muted-foreground">{fmtNum(r.unidadesProxVenc)}</TableCell>
+                                <TableCell className="text-right font-semibold text-sm">{fmtNum(r.bultosTotal)}</TableCell>
+                                <TableCell className="text-right text-sm text-muted-foreground">{fmtNum(r.unidadesTotal)}</TableCell>
+                                <TableCell className="text-center text-xs text-muted-foreground">{r.unidadesPorBulto > 1 ? r.unidadesPorBulto : "-"}</TableCell>
+                                <TableCell className="text-center text-sm">{r.lotes}</TableCell>
+                                <TableCell className="text-center">
+                                  <Badge variant={r.apto === "SI" ? "default" : "destructive"} className="text-xs">{r.apto || "-"}</Badge>
+                                </TableCell>
+                              </TableRow>
+
+                              {/* Expanded: contenedores detail */}
+                              {isExpanded && (
+                                <TableRow key={`detail-${r.articulo}`} className="bg-zinc-900/50">
+                                  <TableCell colSpan={13} className="p-0">
+                                    <div className="px-8 py-3 border-y border-border/50">
+                                      <p className="text-xs font-semibold text-muted-foreground mb-2">
+                                        Detalle de contenedores — {r.articulo} {r.descripcion}
+                                      </p>
+                                      <Table>
+                                        <TableHeader>
+                                          <TableRow>
+                                            <TableHead className="text-xs">Contenedor</TableHead>
+                                            <TableHead className="text-xs">Lote</TableHead>
+                                            <TableHead className="text-xs text-center">Vencimiento</TableHead>
+                                            <TableHead className="text-xs text-center">Días</TableHead>
+                                            <TableHead className="text-xs text-right">Bultos</TableHead>
+                                            <TableHead className="text-xs text-right">Unidades</TableHead>
+                                          </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                          {r.contenedores.map((c, j) => (
+                                            <TableRow key={j} className={rowBg(c.diasRestantes)}>
+                                              <TableCell className="text-xs font-mono py-1">{c.contenedor}</TableCell>
+                                              <TableCell className="text-xs font-mono py-1">{c.lote}</TableCell>
+                                              <TableCell className="text-xs text-center font-mono py-1">{formatDate(c.vencimiento)}</TableCell>
+                                              <TableCell className="text-center py-1">
+                                                <span className={`text-xs font-bold ${diasColor(c.diasRestantes)}`}>{c.diasRestantes}</span>
+                                              </TableCell>
+                                              <TableCell className="text-xs text-right font-semibold py-1">{fmtNum(c.bultos)}</TableCell>
+                                              <TableCell className="text-xs text-right text-muted-foreground py-1">{fmtNum(c.unidades)}</TableCell>
+                                            </TableRow>
+                                          ))}
+                                        </TableBody>
+                                      </Table>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </>
+                          )
+                        })}
+                        {filtered.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
+                              No se encontraron productos
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
                   <ScrollBar orientation="horizontal" />
                 </ScrollArea>
               </CardContent>
@@ -269,24 +243,11 @@ export function FrescuraClient() {
   )
 }
 
-// ── Components ─────────────────────────────────────────────────────
+// ── Components ────────────────────────────────────────────────────
 
-function KpiCard({
-  label,
-  value,
-  active,
-  onClick,
-  color,
-  bgColor,
-  textColor,
-}: {
-  label: string
-  value: number
-  active: boolean
-  onClick: () => void
-  color: string
-  bgColor?: string
-  textColor?: string
+function KpiCard({ label, value, active, onClick, color, bgColor, textColor }: {
+  label: string; value: number; active: boolean; onClick: () => void
+  color: string; bgColor?: string; textColor?: string
 }) {
   return (
     <button
@@ -296,26 +257,20 @@ function KpiCard({
       }`}
     >
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={`text-3xl font-bold mt-1 ${active && textColor ? textColor : ""}`}>
-        {value}
-      </p>
+      <p className={`text-3xl font-bold mt-1 ${active && textColor ? textColor : ""}`}>{value}</p>
     </button>
   )
 }
 
 function StatusBadge({ dias }: { dias: number }) {
-  if (dias < 0)
-    return <Badge className="bg-red-600 text-white text-xs">VENCIDO</Badge>
-  if (dias <= 15)
-    return <Badge className="bg-orange-600 text-white text-xs">CRÍTICO</Badge>
-  if (dias <= 30)
-    return <Badge className="bg-amber-600 text-black text-xs">URGENTE</Badge>
-  if (dias <= 60)
-    return <Badge className="bg-yellow-500 text-black text-xs">ATENCIÓN</Badge>
+  if (dias < 0) return <Badge className="bg-red-600 text-white text-xs">VENCIDO</Badge>
+  if (dias <= 15) return <Badge className="bg-orange-600 text-white text-xs">CRÍTICO</Badge>
+  if (dias <= 30) return <Badge className="bg-amber-600 text-black text-xs">URGENTE</Badge>
+  if (dias <= 60) return <Badge className="bg-yellow-500 text-black text-xs">ATENCIÓN</Badge>
   return <Badge className="bg-emerald-600 text-white text-xs">OK</Badge>
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────
 
 function diasColor(dias: number): string {
   if (dias < 0) return "text-red-500"
@@ -336,4 +291,8 @@ function formatDate(iso: string): string {
   if (!iso) return "-"
   const [y, m, d] = iso.split("-")
   return `${d}/${m}/${y}`
+}
+
+function fmtNum(n: number): string {
+  return n.toLocaleString("es-AR", { maximumFractionDigits: 2 })
 }
