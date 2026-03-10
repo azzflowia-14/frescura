@@ -1,6 +1,7 @@
 "use server"
 
 import { query } from "@/lib/db"
+import upbMap from "@/data/upb-map.json"
 
 export interface ContenedorDetail {
   contenedor: string
@@ -56,27 +57,22 @@ export async function getFrescuraData(): Promise<FrescuraData> {
     Lote: string
     Apto: string
     Contenedor: string
-    UnidadesBulto: number | null
   }>(`
     SELECT
-      s.Articulo,
-      s.Descripción,
-      s.Vencimiento,
-      s.Ingreso,
-      s.Cantidad,
-      s.Lote,
-      s.Apto,
-      s.Contenedor,
-      COALESCE(a.ArticuloUnidadesBulto, a2.ArticuloUnidadesBulto) AS UnidadesBulto
-    FROM dbo.ConsultaStock s
-    LEFT JOIN dbo.Articulo a
-      ON LTRIM(RTRIM(CAST(s.Articulo AS VARCHAR(100)))) = LTRIM(RTRIM(CAST(a.ArticuloCod AS VARCHAR(100))))
-    LEFT JOIN dbo.Articulo a2
-      ON s.Articulo LIKE '%' + RTRIM(a2.ArticuloCod) + '%'
-      AND a.ArticuloCod IS NULL
-    WHERE s.Vencimiento IS NOT NULL AND s.Vencimiento <> ''
-    ORDER BY s.Articulo, s.Vencimiento
+      Articulo,
+      Descripción,
+      Vencimiento,
+      Ingreso,
+      Cantidad,
+      Lote,
+      Apto,
+      Contenedor
+    FROM dbo.ConsultaStock
+    WHERE Vencimiento IS NOT NULL AND Vencimiento <> ''
+    ORDER BY Articulo, Vencimiento
   `)
+
+  const upb$ = upbMap as Record<string, number>
 
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
@@ -104,7 +100,7 @@ export async function getFrescuraData(): Promise<FrescuraData> {
     const unidades = r.Cantidad || 0
     if (unidades <= 0) continue
 
-    const upb = r.UnidadesBulto && r.UnidadesBulto > 0 ? r.UnidadesBulto : 1
+    const upb = upb$[articulo] || 1
     const bultos = upb > 1 ? Math.round((unidades / upb) * 100) / 100 : unidades
     const vencStr = venc.toISOString().slice(0, 10)
 
