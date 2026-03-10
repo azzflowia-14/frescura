@@ -37,6 +37,7 @@ export interface FrescuraData {
     ok: number
   }
   timestamp: string
+  debug?: string
 }
 
 export async function getFrescuraData(): Promise<FrescuraData> {
@@ -59,10 +60,13 @@ export async function getFrescuraData(): Promise<FrescuraData> {
       s.Lote,
       s.Apto,
       s.Contenedor,
-      a.ArticuloUnidadesBulto AS UnidadesBulto
+      COALESCE(a.ArticuloUnidadesBulto, a2.ArticuloUnidadesBulto) AS UnidadesBulto
     FROM dbo.ConsultaStock s
     LEFT JOIN dbo.Articulo a
-      ON LTRIM(RTRIM(s.Articulo)) = LTRIM(RTRIM(a.ArticuloCod))
+      ON LTRIM(RTRIM(CAST(s.Articulo AS VARCHAR(100)))) = LTRIM(RTRIM(CAST(a.ArticuloCod AS VARCHAR(100))))
+    LEFT JOIN dbo.Articulo a2
+      ON s.Articulo LIKE '%' + RTRIM(a2.ArticuloCod) + '%'
+      AND a.ArticuloCod IS NULL
     WHERE s.Vencimiento IS NOT NULL AND s.Vencimiento <> ''
     ORDER BY s.Articulo, s.Vencimiento
   `)
@@ -161,7 +165,10 @@ export async function getFrescuraData(): Promise<FrescuraData> {
     ok: resumen.filter((r) => r.diasRestantes > 60).length,
   }
 
-  return { resumen, totales, timestamp: new Date().toISOString() }
+  const conUpb = resumen.filter(r => r.unidadesPorBulto > 1).length
+  const debug = `JOIN match: ${conUpb}/${resumen.length} productos con UnidadesBulto > 1. Sample UPB values: ${resumen.slice(0, 5).map(r => `${r.articulo}=${r.unidadesPorBulto}`).join(', ')}`
+
+  return { resumen, totales, timestamp: new Date().toISOString(), debug }
 }
 
 function parseDate(str: string): Date | null {

@@ -120,6 +120,13 @@ export function FrescuraClient() {
               <KpiCard label="OK (+60d)" value={data.totales.ok} active={filtro === "ok"} onClick={() => setFiltro("ok")} color="border-emerald-600" bgColor="bg-emerald-950/30" textColor="text-emerald-400" />
             </div>
 
+            {/* Debug info */}
+            {data.debug && (
+              <div className="text-xs text-amber-400 bg-amber-950/30 border border-amber-800 rounded-md px-3 py-2 font-mono">
+                {data.debug}
+              </div>
+            )}
+
             {/* Search */}
             <div className="flex items-center gap-3">
               <Input placeholder="Buscar artículo o descripción..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
@@ -129,7 +136,7 @@ export function FrescuraClient() {
             {/* Main table */}
             <Card>
               <CardContent className="p-0">
-                <ScrollArea className="max-h-[calc(100vh-340px)]">
+                <ScrollArea className="">
                   <div className="min-w-max">
                     <Table>
                       <TableHeader>
@@ -174,7 +181,7 @@ export function FrescuraClient() {
                                 <TableCell className="text-right text-sm text-muted-foreground">{fmtNum(r.unidadesProxVenc)}</TableCell>
                                 <TableCell className="text-right font-semibold text-sm">{fmtNum(r.bultosTotal)}</TableCell>
                                 <TableCell className="text-right text-sm text-muted-foreground">{fmtNum(r.unidadesTotal)}</TableCell>
-                                <TableCell className="text-center text-xs text-muted-foreground">{r.unidadesPorBulto > 1 ? r.unidadesPorBulto : "-"}</TableCell>
+                                <TableCell className="text-center text-xs text-muted-foreground">{r.unidadesPorBulto > 1 ? r.unidadesPorBulto : <span className="text-red-400">1?</span>}</TableCell>
                                 <TableCell className="text-center text-sm">{r.lotes}</TableCell>
                                 <TableCell className="text-center">
                                   <Badge variant={r.apto === "SI" ? "default" : "destructive"} className="text-xs">{r.apto || "-"}</Badge>
