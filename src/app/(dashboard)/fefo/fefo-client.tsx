@@ -45,7 +45,6 @@ export function FefoClient() {
     )
   })
 
-  // Top artículos con más violaciones
   const topArticulos = data
     ? Object.entries(data.totales.porArticulo)
         .sort((a, b) => b[1] - a[1])
@@ -58,33 +57,33 @@ export function FefoClient() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <ShieldAlert className="w-6 h-6 text-red-400" />
+          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+            <ShieldAlert className="w-6 h-6 text-red-500" />
             FEFO Vulnerado
           </h1>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-slate-400">
             Producto más nuevo sacado antes que producto más viejo (violación First Expiry First Out)
           </p>
         </div>
         <button
           onClick={load}
           disabled={loading}
-          className="flex items-center gap-2 px-3 py-2 text-sm rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 shadow-sm transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
         </button>
       </div>
 
       {data?.error && (
-        <div className="bg-red-950/30 border border-red-800/40 rounded-lg p-3">
-          <p className="text-sm text-red-400">{data.error}</p>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+          <p className="text-sm text-red-600">{data.error}</p>
         </div>
       )}
 
       {loading && !data ? (
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 bg-zinc-800/50 rounded-lg animate-pulse" />
+            <div key={i} className="h-24 bg-white border border-slate-200 rounded-xl animate-pulse" />
           ))}
         </div>
       ) : data ? (
@@ -97,48 +96,27 @@ export function FefoClient() {
               icon={AlertTriangle}
               color={data.totales.total > 0 ? "red" : "green"}
             />
-            <KpiCard
-              title="Empresas Afectadas"
-              value={Object.keys(data.totales.porEmpresa).length}
-              icon={Building2}
-              color="orange"
-            />
-            <KpiCard
-              title="Artículos Afectados"
-              value={Object.keys(data.totales.porArticulo).length}
-              icon={AlertTriangle}
-              color="yellow"
-            />
+            <KpiCard title="Empresas Afectadas" value={Object.keys(data.totales.porEmpresa).length} icon={Building2} color="orange" />
+            <KpiCard title="Artículos Afectados" value={Object.keys(data.totales.porArticulo).length} icon={AlertTriangle} color="yellow" />
             <KpiCard
               title="Peor Diferencia"
-              value={
-                data.violations.length > 0
-                  ? `${Math.max(...data.violations.map((v) => v.diasDiferencia))} días`
-                  : "0 días"
-              }
+              value={data.violations.length > 0 ? `${Math.max(...data.violations.map((v) => v.diasDiferencia))} días` : "0 días"}
               subtitle="entre picking y almacén"
               icon={ShieldAlert}
               color="red"
             />
           </div>
 
-          {/* Chart - Top artículos */}
+          {/* Chart */}
           {topArticulos.length > 0 && (
-            <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-zinc-300 mb-3">Top Artículos con Violaciones FEFO</h3>
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+              <h3 className="text-sm font-semibold text-slate-600 mb-3">Top Artículos con Violaciones FEFO</h3>
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={topArticulos} layout="vertical" margin={{ left: 80 }}>
-                  <XAxis type="number" tick={{ fill: "#a1a1aa", fontSize: 11 }} />
-                  <YAxis
-                    dataKey="name"
-                    type="category"
-                    tick={{ fill: "#a1a1aa", fontSize: 11 }}
-                    width={80}
-                  />
-                  <Tooltip
-                    contentStyle={{ background: "#27272a", border: "1px solid #3f3f46", borderRadius: 8, color: "#fff" }}
-                  />
-                  <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                  <XAxis type="number" tick={{ fill: "#64748b", fontSize: 11 }} />
+                  <YAxis dataKey="name" type="category" tick={{ fill: "#64748b", fontSize: 11 }} width={80} />
+                  <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, color: "#334155" }} />
+                  <Bar dataKey="value" radius={[0, 6, 6, 0]}>
                     {topArticulos.map((_, i) => (
                       <Cell key={i} fill={i < 3 ? "#ef4444" : i < 6 ? "#f97316" : "#eab308"} />
                     ))}
@@ -154,52 +132,41 @@ export function FefoClient() {
             placeholder="Buscar por artículo o empresa..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full max-w-md px-3 py-2 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-zinc-200 placeholder:text-zinc-500"
+            className="w-full max-w-md px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-700 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
           />
 
           {/* Table */}
-          <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg overflow-hidden">
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-700/50 bg-zinc-800/50">
-                    <th className="text-left px-3 py-2 text-xs text-zinc-400 font-medium">#</th>
-                    <th className="text-left px-3 py-2 text-xs text-zinc-400 font-medium">Empresa</th>
-                    <th className="text-left px-3 py-2 text-xs text-zinc-400 font-medium">Artículo (Picking)</th>
-                    <th className="text-left px-3 py-2 text-xs text-zinc-400 font-medium">Venc. Picking</th>
-                    <th className="text-left px-3 py-2 text-xs text-zinc-400 font-medium">Ubicación Pick.</th>
-                    <th className="text-left px-3 py-2 text-xs text-zinc-400 font-medium">Artículo (Almacén)</th>
-                    <th className="text-left px-3 py-2 text-xs text-zinc-400 font-medium">Venc. Almacén</th>
-                    <th className="text-left px-3 py-2 text-xs text-zinc-400 font-medium">Ubicación Alm.</th>
-                    <th className="text-right px-3 py-2 text-xs text-zinc-400 font-medium">Dif. Días</th>
+                  <tr className="border-b border-slate-100 bg-slate-50">
+                    <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">#</th>
+                    <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">Empresa</th>
+                    <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">Artículo (Picking)</th>
+                    <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">Venc. Picking</th>
+                    <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">Ubicación Pick.</th>
+                    <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">Artículo (Almacén)</th>
+                    <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">Venc. Almacén</th>
+                    <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">Ubicación Alm.</th>
+                    <th className="text-right px-4 py-3 text-xs text-slate-500 font-semibold">Dif. Días</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered?.map((v, i) => (
-                    <tr
-                      key={i}
-                      className={`border-b border-zinc-800/50 hover:bg-zinc-800/30 ${
-                        v.diasDiferencia > 30 ? "bg-red-950/10" : ""
-                      }`}
-                    >
-                      <td className="px-3 py-2 text-zinc-500 tabular-nums">{i + 1}</td>
-                      <td className="px-3 py-2 text-zinc-300">{v.empresa}</td>
-                      <td className="px-3 py-2 text-zinc-200 font-mono text-xs">{v.pickingArticulo}</td>
-                      <td className="px-3 py-2 text-red-400 tabular-nums">{v.pickingVencimiento}</td>
-                      <td className="px-3 py-2 text-zinc-400 text-xs">{v.pickingUbicacion}</td>
-                      <td className="px-3 py-2 text-zinc-200 font-mono text-xs">{v.almacenArticulo}</td>
-                      <td className="px-3 py-2 text-emerald-400 tabular-nums">{v.almacenVencimiento}</td>
-                      <td className="px-3 py-2 text-zinc-400 text-xs">{v.almacenUbicacion}</td>
-                      <td className="px-3 py-2 text-right">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium tabular-nums ${
-                            v.diasDiferencia > 30
-                              ? "bg-red-500/20 text-red-400"
-                              : v.diasDiferencia > 7
-                              ? "bg-orange-500/20 text-orange-400"
-                              : "bg-yellow-500/20 text-yellow-400"
-                          }`}
-                        >
+                    <tr key={i} className={`border-b border-slate-50 hover:bg-blue-50/50 transition-colors ${v.diasDiferencia > 30 ? "bg-red-50/50" : ""}`}>
+                      <td className="px-4 py-2.5 text-slate-400 tabular-nums">{i + 1}</td>
+                      <td className="px-4 py-2.5 text-slate-700">{v.empresa}</td>
+                      <td className="px-4 py-2.5 text-slate-800 font-mono text-xs">{v.pickingArticulo}</td>
+                      <td className="px-4 py-2.5 text-red-600 tabular-nums font-medium">{v.pickingVencimiento}</td>
+                      <td className="px-4 py-2.5 text-slate-500 text-xs">{v.pickingUbicacion}</td>
+                      <td className="px-4 py-2.5 text-slate-800 font-mono text-xs">{v.almacenArticulo}</td>
+                      <td className="px-4 py-2.5 text-emerald-600 tabular-nums font-medium">{v.almacenVencimiento}</td>
+                      <td className="px-4 py-2.5 text-slate-500 text-xs">{v.almacenUbicacion}</td>
+                      <td className="px-4 py-2.5 text-right">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums ${
+                          v.diasDiferencia > 30 ? "bg-red-100 text-red-700" : v.diasDiferencia > 7 ? "bg-orange-100 text-orange-700" : "bg-amber-100 text-amber-700"
+                        }`}>
                           {v.diasDiferencia}d
                         </span>
                       </td>
@@ -209,7 +176,7 @@ export function FefoClient() {
               </table>
             </div>
             {filtered && filtered.length === 0 && (
-              <div className="p-8 text-center text-zinc-500">
+              <div className="p-8 text-center text-slate-400">
                 {data.totales.total === 0 ? "Sin violaciones FEFO detectadas" : "Sin resultados para la búsqueda"}
               </div>
             )}
