@@ -22,11 +22,12 @@ const PIE_COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4
 export function OcupacionClient() {
   const [data, setData] = useState<OcupacionData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [cd, setCd] = useState("TODOS")
 
-  async function load() {
+  async function load(selectedCd?: string) {
     setLoading(true)
     try {
-      const result = await getOcupacionData()
+      const result = await getOcupacionData(selectedCd ?? cd)
       setData(result)
     } finally {
       setLoading(false)
@@ -35,13 +36,17 @@ export function OcupacionClient() {
 
   useEffect(() => {
     load()
-    const interval = setInterval(load, 120_000)
+    const interval = setInterval(() => load(), 120_000)
     return () => clearInterval(interval)
   }, [])
 
+  function handleCdChange(newCd: string) {
+    setCd(newCd)
+    load(newCd)
+  }
+
   const r = data?.resumen
 
-  // Data para chart de caras
   const carasData = r
     ? Object.entries(r.porCara)
         .sort((a, b) => a[0].localeCompare(b[0]))
@@ -53,7 +58,6 @@ export function OcupacionClient() {
         }))
     : []
 
-  // Data para chart de estados
   const estadosData = r
     ? Object.entries(r.porEstado)
         .sort((a, b) => b[1] - a[1])
@@ -61,7 +65,6 @@ export function OcupacionClient() {
         .map(([name, value]) => ({ name, value }))
     : []
 
-  // Data para niveles
   const nivelesData = r
     ? Object.entries(r.porNivel)
         .sort((a, b) => a[0].localeCompare(b[0]))
@@ -75,7 +78,7 @@ export function OcupacionClient() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Warehouse className="w-6 h-6 text-blue-400" />
@@ -83,15 +86,31 @@ export function OcupacionClient() {
           </h1>
           <p className="text-sm text-zinc-400">
             Distribución de ubicaciones en tiempo real
+            {cd !== "TODOS" && <span className="text-blue-400 ml-1">— Almacén {cd}</span>}
           </p>
         </div>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="flex items-center gap-2 px-3 py-2 text-sm rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Filtro por Almacén/CD */}
+          <select
+            value={cd}
+            onChange={(e) => handleCdChange(e.target.value)}
+            className="px-3 py-2 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-zinc-200"
+          >
+            <option value="TODOS">Todos los almacenes</option>
+            {data?.cdsDisponibles.map((c) => (
+              <option key={c} value={c}>
+                Almacén {c}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() => load()}
+            disabled={loading}
+            className="flex items-center gap-2 px-3 py-2 text-sm rounded-md bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          </button>
+        </div>
       </div>
 
       {data?.error && (
@@ -142,7 +161,9 @@ export function OcupacionClient() {
           {/* Ocupación bar grande */}
           <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-zinc-300 font-medium">Capacidad General</span>
+              <span className="text-sm text-zinc-300 font-medium">
+                Capacidad {cd !== "TODOS" ? `Almacén ${cd}` : "General"}
+              </span>
               <span className="text-lg font-bold text-white tabular-nums">{r.porcentajeOcupacion}%</span>
             </div>
             <div className="w-full h-6 bg-zinc-900 rounded-full overflow-hidden">
@@ -163,9 +184,45 @@ export function OcupacionClient() {
             </div>
           </div>
 
+          {/* Comparativa de almacenes (solo cuando se ve TODOS) */}
+          {cd === "TODOS" && data?.cdsDisponibles && data.cdsDisponibles.length > 1 && (
+            <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-zinc-300 mb-3">Comparativa por Almacén</h3>
+              <div className="space-y-2">
+                {data.cdsDisponibles.map((c) => {
+                  const items = r.detalle.filter((d) => d.cd === c)
+                  // Si el detalle fue limitado, caemos en los datos del total
+                  const total = items.length || 0
+                  const ocup = items.filter((d) => d.articulo && d.articulo !== "" && d.articulo !== "null").length
+                  const pct = total > 0 ? Math.round((ocup / total) * 100) : 0
+                  return (
+                    <button
+                      key={c}
+                      onClick={() => handleCdChange(c)}
+                      className="w-full flex items-center gap-3 hover:bg-zinc-700/30 rounded-md p-1 transition-colors"
+                    >
+                      <span className="text-xs text-zinc-300 font-medium w-24 shrink-0 text-left">Almacén {c}</span>
+                      <div className="flex-1 h-4 bg-zinc-900 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            pct > 90 ? "bg-red-500" : pct > 75 ? "bg-orange-500" : "bg-blue-500"
+                          }`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-zinc-400 tabular-nums w-10 text-right">{pct}%</span>
+                      <span className="text-xs text-zinc-500 tabular-nums w-24 text-right">
+                        {ocup}/{total} ubic.
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Charts row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Ocupación por Cara */}
             {carasData.length > 0 && (
               <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4">
                 <h3 className="text-sm font-medium text-zinc-300 mb-3">Ocupación por Cara</h3>
@@ -183,7 +240,6 @@ export function OcupacionClient() {
               </div>
             )}
 
-            {/* Estados */}
             {estadosData.length > 0 && (
               <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4">
                 <h3 className="text-sm font-medium text-zinc-300 mb-3">Distribución por Estado</h3>

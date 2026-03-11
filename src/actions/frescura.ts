@@ -42,13 +42,16 @@ export interface FrescuraData {
     atencion: number
     ok: number
   }
+  depositosDisponibles: string[]
+  depositoSeleccionado: string
   timestamp: string
   debug?: string
 }
 
-export async function getFrescuraData(): Promise<FrescuraData> {
+export async function getFrescuraData(deposito?: string): Promise<FrescuraData> {
   // Query stock + join with Articulo for UnidadesBulto conversion
   const rows = await query<{
+    Deposito: string
     Articulo: string
     Descripción: string
     Vencimiento: string
@@ -59,6 +62,7 @@ export async function getFrescuraData(): Promise<FrescuraData> {
     Contenedor: string
   }>(`
     SELECT
+      Deposito,
       Articulo,
       Descripción,
       Vencimiento,
@@ -71,6 +75,15 @@ export async function getFrescuraData(): Promise<FrescuraData> {
     WHERE Vencimiento IS NOT NULL AND Vencimiento <> ''
     ORDER BY Articulo, Vencimiento
   `)
+
+  // Obtener depósitos únicos
+  const depsSet = new Set(rows.map((r) => (r.Deposito || "").trim()).filter(Boolean))
+  const depositosDisponibles = Array.from(depsSet).sort()
+
+  // Filtrar por depósito si se seleccionó
+  const filteredRows = deposito && deposito !== "TODOS"
+    ? rows.filter((r) => (r.Deposito || "").trim() === deposito)
+    : rows
 
   const upb$ = upbMap as Record<string, number>
 
@@ -92,7 +105,7 @@ export async function getFrescuraData(): Promise<FrescuraData> {
     contenedores: ContenedorDetail[]
   }>()
 
-  for (const r of rows) {
+  for (const r of filteredRows) {
     const articulo = r.Articulo?.trim() || ""
     const venc = parseDate(r.Vencimiento?.trim())
     if (!venc || !articulo) continue
@@ -189,7 +202,7 @@ export async function getFrescuraData(): Promise<FrescuraData> {
   const conUpb = resumen.filter(r => r.unidadesPorBulto > 1).length
   const debug = `JOIN match: ${conUpb}/${resumen.length} productos con UnidadesBulto > 1. Sample UPB values: ${resumen.slice(0, 5).map(r => `${r.articulo}=${r.unidadesPorBulto}`).join(', ')}`
 
-  return { resumen, totales, timestamp: new Date().toISOString(), debug }
+  return { resumen, totales, depositosDisponibles, depositoSeleccionado: deposito || "TODOS", timestamp: new Date().toISOString(), debug }
 }
 
 function parseDate(str: string): Date | null {

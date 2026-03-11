@@ -26,11 +26,12 @@ export function FrescuraClient() {
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [deposito, setDeposito] = useState("TODOS")
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (dep?: string) => {
     try {
       setError("")
-      const result = await getFrescuraData()
+      const result = await getFrescuraData(dep ?? deposito)
       setData(result)
       setLastUpdate(new Date())
     } catch (e: unknown) {
@@ -38,7 +39,13 @@ export function FrescuraClient() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [deposito])
+
+  function handleDepositoChange(dep: string) {
+    setDeposito(dep)
+    setLoading(true)
+    loadData(dep)
+  }
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -80,12 +87,23 @@ export function FrescuraClient() {
             <Badge variant="outline" className="text-xs">Vencimientos</Badge>
           </div>
           <div className="flex items-center gap-3">
+            {/* Filtro por Almacén */}
+            <select
+              value={deposito}
+              onChange={(e) => handleDepositoChange(e.target.value)}
+              className="px-2 py-1 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-zinc-200"
+            >
+              <option value="TODOS">Todos los almacenes</option>
+              {data?.depositosDisponibles?.map((d) => (
+                <option key={d} value={d}>Almacén {d}</option>
+              ))}
+            </select>
             <div className="flex items-center gap-2 border rounded-md px-2 py-1">
               <label className="text-xs text-muted-foreground">Auto-refresh:</label>
               <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} className="accent-primary" />
               {autoRefresh && <span className="text-xs text-muted-foreground">60s</span>}
             </div>
-            <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
+            <Button variant="outline" size="sm" onClick={() => loadData()} disabled={loading}>
               {loading ? "Cargando..." : "Refrescar"}
             </Button>
             {lastUpdate && (
