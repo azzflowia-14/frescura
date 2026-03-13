@@ -5,6 +5,7 @@ import { getChessStock } from "@/lib/chess"
 import {
   getSkuInfo,
   bultosToHl,
+  esMercaderia,
   clasificacion,
   getEspeciales,
   ESPECIAL_LABELS,
@@ -122,6 +123,7 @@ export async function getGerencialData(
   for (const row of chessStock) {
     const art = String(row.idArticulo).trim()
     if (!art) continue
+    if (!esMercaderia(art)) continue
     const existing = artAgg.get(art)
     const bultos = Number(row.cantBultos) || 0
     if (bultos <= 0) continue

@@ -2,7 +2,7 @@
 
 import { getVpdChess } from "@/actions/vpd-chess"
 import { getChessStock } from "@/lib/chess"
-import { getSkuInfo, bultosToHl } from "@/lib/sku"
+import { getSkuInfo, bultosToHl, esMercaderia } from "@/lib/sku"
 
 export interface AnalisisItem {
   articulo: string
@@ -50,6 +50,7 @@ export async function getAnalisisData(): Promise<AnalisisData> {
   for (const r of chessStock) {
     const art = String(r.idArticulo).trim()
     if (!art) continue
+    if (!esMercaderia(art)) continue
     const bultos = Number(r.cantBultos) || 0
     if (bultos <= 0) continue
 

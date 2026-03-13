@@ -46,6 +46,11 @@ export function getSkuInfo(articulo: string | number): SkuInfo | null {
   return articles[String(articulo)] ?? null
 }
 
+export function esMercaderia(articulo: string | number): boolean {
+  const info = articles[String(articulo)]
+  return info?.tipoProducto === "MERCADERIA"
+}
+
 export function getUnidadesPorBulto(articulo: string | number): number {
   return articles[String(articulo)]?.unidadesPorBulto ?? 1
 }
