@@ -68,6 +68,7 @@ export function GerencialClient() {
   const [data, setData] = useState<GerencialData | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [stockModal, setStockModal] = useState<"cervezas" | "nabs" | null>(null)
   const [showObjModal, setShowObjModal] = useState(false)
   const [objCervezas, setObjCervezas] = useState("")
   const [objNabs, setObjNabs] = useState("")
@@ -143,18 +144,24 @@ export function GerencialClient() {
 
       {/* Fila 1: KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard
-          title="Stock Cervezas"
-          value={`${fmtHl(data.stockCervezasHl)} HL`}
-          icon={Beer}
-          color="yellow"
-        />
-        <KpiCard
-          title="Stock NABS"
-          value={`${fmtHl(data.stockNabsHl)} HL`}
-          icon={GlassWater}
-          color="blue"
-        />
+        <button onClick={() => setStockModal("cervezas")} className="text-left">
+          <KpiCard
+            title="Stock Cervezas"
+            value={`${fmtHl(data.stockCervezasHl)} HL`}
+            subtitle="Click para ver detalle"
+            icon={Beer}
+            color="yellow"
+          />
+        </button>
+        <button onClick={() => setStockModal("nabs")} className="text-left">
+          <KpiCard
+            title="Stock NABS"
+            value={`${fmtHl(data.stockNabsHl)} HL`}
+            subtitle="Click para ver detalle"
+            icon={GlassWater}
+            color="blue"
+          />
+        </button>
         <KpiCard
           title="Piso Cervezas"
           value={`${fmtDias(data.diasPisoCervezas)} días`}
@@ -419,6 +426,56 @@ export function GerencialClient() {
       <p className="text-xs text-slate-300 text-right">
         Actualizado: {new Date(data.timestamp).toLocaleString("es-AR")}
       </p>
+
+      {/* Modal detalle stock por SKU */}
+      {stockModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setStockModal(null)}>
+          <div className="bg-white rounded-xl p-6 w-full max-w-2xl shadow-xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">
+                {stockModal === "cervezas" ? "Stock Cervezas" : "Stock NABS"} — Detalle por SKU
+              </h3>
+              <button onClick={() => setStockModal(null)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+            </div>
+            <div className="overflow-auto flex-1">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-slate-50">
+                  <tr className="text-left text-xs text-slate-500 uppercase border-b">
+                    <th className="p-2">Art.</th>
+                    <th className="p-2">Descripción</th>
+                    <th className="p-2 text-right">Bultos</th>
+                    <th className="p-2 text-right">HL</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {data.stockItems
+                    .filter((s) => s.clasificacion === stockModal)
+                    .sort((a, b) => b.hl - a.hl)
+                    .map((s) => (
+                      <tr key={s.articulo} className="hover:bg-slate-50">
+                        <td className="p-2 font-mono text-xs">{s.articulo}</td>
+                        <td className="p-2 max-w-[250px] truncate">{s.descripcion}</td>
+                        <td className="p-2 text-right font-mono text-xs">{s.bultos.toLocaleString()}</td>
+                        <td className="p-2 text-right font-mono text-xs font-semibold">{fmtHl(s.hl)}</td>
+                      </tr>
+                    ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-slate-200 font-semibold">
+                    <td className="p-2" colSpan={2}>TOTAL</td>
+                    <td className="p-2 text-right font-mono text-xs">
+                      {data.stockItems.filter((s) => s.clasificacion === stockModal).reduce((sum, s) => sum + s.bultos, 0).toLocaleString()}
+                    </td>
+                    <td className="p-2 text-right font-mono text-xs">
+                      {fmtHl(stockModal === "cervezas" ? data.stockCervezasHl : data.stockNabsHl)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
