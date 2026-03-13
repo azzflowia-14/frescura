@@ -1,8 +1,8 @@
 "use server"
 
-import { query } from "@/lib/db"
 import { getVpdChess } from "@/actions/vpd-chess"
-import { getSkuInfo, bultosToHl, getUnidadesPorBulto } from "@/lib/sku"
+import { getChessStock } from "@/lib/chess"
+import { getSkuInfo, bultosToHl } from "@/lib/sku"
 
 export interface AnalisisItem {
   articulo: string
@@ -32,48 +32,42 @@ export interface AnalisisData {
 }
 
 export async function getAnalisisData(): Promise<AnalisisData> {
-  const [stockRows, vpd30] = await Promise.all([
-    query<{
-      Articulo: string
-      Descripción: string
-      Cantidad: number
-      Vencimiento: string
-    }>(`
-      SELECT Articulo, Descripción, Cantidad, Vencimiento
-      FROM dbo.ConsultaStock
-      WHERE Cantidad > 0
-    `),
+  const [chessStock, vpd30] = await Promise.all([
+    getChessStock(),
     getVpdChess(30),
   ])
 
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
 
-  // Group stock by article
+  // Group Chess stock by article (aggregate bultos, track min expiry)
   const artMap = new Map<string, {
     descripcion: string
-    unidades: number
+    bultos: number
     minDiasRestantes: number | null
   }>()
 
-  for (const r of stockRows) {
-    const art = r.Articulo?.trim()
+  for (const r of chessStock) {
+    const art = String(r.idArticulo).trim()
     if (!art) continue
+    const bultos = Number(r.cantBultos) || 0
+    if (bultos <= 0) continue
+
     const existing = artMap.get(art)
     let dias: number | null = null
-    if (r.Vencimiento) {
-      const venc = parseDate(String(r.Vencimiento))
+    if (r.fecVtoLote) {
+      const venc = parseDate(String(r.fecVtoLote))
       if (venc) dias = Math.ceil((venc.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24))
     }
     if (existing) {
-      existing.unidades += r.Cantidad || 0
+      existing.bultos += bultos
       if (dias !== null && (existing.minDiasRestantes === null || dias < existing.minDiasRestantes)) {
         existing.minDiasRestantes = dias
       }
     } else {
       artMap.set(art, {
-        descripcion: r.Descripción?.trim() ?? "",
-        unidades: r.Cantidad || 0,
+        descripcion: String(r.dsArticulo || "").trim(),
+        bultos,
         minDiasRestantes: dias,
       })
     }
@@ -85,8 +79,7 @@ export async function getAnalisisData(): Promise<AnalisisData> {
 
   for (const [art, data] of artMap) {
     const info = getSkuInfo(art)
-    const upb = getUnidadesPorBulto(art)
-    const bultos = upb > 1 ? data.unidades / upb : data.unidades
+    const bultos = data.bultos
     const hl = bultosToHl(art, bultos)
     totalHl += hl
 

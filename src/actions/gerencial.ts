@@ -1,11 +1,10 @@
 "use server"
 
-import { query } from "@/lib/db"
 import { getVpdChess } from "@/actions/vpd-chess"
+import { getChessStock } from "@/lib/chess"
 import {
   getSkuInfo,
   bultosToHl,
-  unidadesToHl,
   clasificacion,
   getEspeciales,
   ESPECIAL_LABELS,
@@ -111,21 +110,27 @@ export async function getGerencialData(
   const m = mes ?? hoy.getMonth() + 1
   const a = anio ?? hoy.getFullYear()
 
-  // Parallel: stock from WMS + VPD 7 days from Chess + objectives
-  const [stockRows, vpd7, objetivos] = await Promise.all([
-    query<{
-      Articulo: string
-      Descripción: string
-      Cantidad: number
-    }>(`
-      SELECT Articulo, Descripción, SUM(Cantidad) as Cantidad
-      FROM dbo.ConsultaStock
-      WHERE Cantidad > 0
-      GROUP BY Articulo, Descripción
-    `),
+  // Parallel: stock from Chess + VPD 7 days from Chess + objectives
+  const [chessStock, vpd7, objetivos] = await Promise.all([
+    getChessStock(),
     getVpdChess(7),
     getObjetivos(m, a),
   ])
+
+  // Aggregate Chess stock by article (may have multiple lines per article/lote/deposito)
+  const artAgg = new Map<string, { descripcion: string; bultos: number }>()
+  for (const row of chessStock) {
+    const art = String(row.idArticulo).trim()
+    if (!art) continue
+    const existing = artAgg.get(art)
+    const bultos = Number(row.cantBultos) || 0
+    if (bultos <= 0) continue
+    if (existing) {
+      existing.bultos += bultos
+    } else {
+      artAgg.set(art, { descripcion: String(row.dsArticulo || "").trim(), bultos })
+    }
+  }
 
   // Convert stock to HL
   const stockItems: StockHlItem[] = []
@@ -133,18 +138,15 @@ export async function getGerencialData(
   let stockNabsHl = 0
   const divHlMap = new Map<string, number>()
 
-  for (const row of stockRows) {
-    const art = row.Articulo?.trim()
-    if (!art) continue
+  for (const [art, data] of artAgg) {
     const info = getSkuInfo(art)
-    const upb = info?.unidadesPorBulto ?? 1
-    const bultos = upb > 1 ? row.Cantidad / upb : row.Cantidad
-    const hl = unidadesToHl(art, row.Cantidad)
+    const bultos = data.bultos
+    const hl = bultosToHl(art, bultos)
     const clasif = clasificacion(art)
 
     stockItems.push({
       articulo: art,
-      descripcion: row.Descripción?.trim() ?? "",
+      descripcion: data.descripcion,
       division: info?.division ?? "",
       marca: info?.marca ?? "",
       bultos: Math.round(bultos * 100) / 100,

@@ -68,3 +68,33 @@ export async function chessGet<T = unknown>(
   if (!res.ok) throw new Error(`Chess API error: ${res.status}`)
   return res.json()
 }
+
+// ─── Stock Físico ─────────────────────────────────────────────────
+
+export interface ChessStockLine {
+  fecha: string
+  idDeposito: number | string
+  idAlmacen: number | string
+  idArticulo: number | string
+  dsArticulo: string
+  fecVtoLote: string
+  cantBultos: number
+  cantUnidades: number
+}
+
+interface StockResponse {
+  [key: string]: unknown
+}
+
+export async function getChessStock(): Promise<ChessStockLine[]> {
+  const res = await chessGet<StockResponse>("/stock/")
+
+  // Extract array from response (Chess wraps in dataset)
+  for (const val of Object.values(res)) {
+    if (Array.isArray(val) && val.length > 0 && val[0].idArticulo !== undefined) {
+      return val as ChessStockLine[]
+    }
+  }
+  if (Array.isArray(res)) return res as unknown as ChessStockLine[]
+  return []
+}
