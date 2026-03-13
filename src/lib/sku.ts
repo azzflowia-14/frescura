@@ -63,7 +63,7 @@ export function getHlPorUnidad(articulo: string | number): number {
 export function bultosToHl(articulo: string | number, bultos: number): number {
   const info = articles[String(articulo)]
   if (!info || info.hlPorUnidad <= 0) return 0
-  return Math.round(bultos * info.unidadesPorBulto * info.hlPorUnidad * 1000) / 1000
+  return Math.round(bultos * info.hlPorUnidad * 1000) / 1000
 }
 
 /** Convert units to hectoliters for a given article */
