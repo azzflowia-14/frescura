@@ -72,29 +72,34 @@ export async function chessGet<T = unknown>(
 // ─── Stock Físico ─────────────────────────────────────────────────
 
 export interface ChessStockLine {
-  fecha: string
-  idDeposito: number | string
-  idAlmacen: number | string
+  fecha: string | null
+  idDeposito: number
+  idAlmacen: number
   idArticulo: number | string
   dsArticulo: string
-  fecVtoLote: string
+  fecVtoLote: string | null
   cantBultos: number
   cantUnidades: number
 }
 
 interface StockResponse {
+  dsStockFisicoApi?: { dsStock?: ChessStockLine[] }
+  error?: { mensaje: string }[]
   [key: string]: unknown
 }
 
-export async function getChessStock(): Promise<ChessStockLine[]> {
-  const res = await chessGet<StockResponse>("/stock/")
+export async function getChessStock(idDeposito: number = 1): Promise<ChessStockLine[]> {
+  const res = await chessGet<StockResponse>("/stock/", { idDeposito })
 
-  // Extract array from response (Chess wraps in dataset)
+  // Primary path: dsStockFisicoApi.dsStock
+  const rows = res.dsStockFisicoApi?.dsStock
+  if (Array.isArray(rows)) return rows
+
+  // Fallback: search for array with idArticulo
   for (const val of Object.values(res)) {
     if (Array.isArray(val) && val.length > 0 && val[0].idArticulo !== undefined) {
       return val as ChessStockLine[]
     }
   }
-  if (Array.isArray(res)) return res as unknown as ChessStockLine[]
   return []
 }
