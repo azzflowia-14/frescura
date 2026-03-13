@@ -28,7 +28,10 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend,
+  LineChart,
+  Line,
+  CartesianGrid,
+  ReferenceLine,
 } from "recharts"
 import type { CategoriaEspecial } from "@/lib/sku"
 
@@ -110,12 +113,12 @@ export function GerencialClient() {
     year: "numeric",
   })
 
-  // Progress bars data
+  // Progress bars data (ingresos vs objetivo)
   const progCervezas = data.objetivos.cervezas > 0
-    ? Math.min(100, Math.round((data.stockCervezasHl / data.objetivos.cervezas) * 100))
+    ? Math.min(100, Math.round((data.ingresoCervezasHl / data.objetivos.cervezas) * 100))
     : 0
   const progNabs = data.objetivos.nabs > 0
-    ? Math.min(100, Math.round((data.stockNabsHl / data.objetivos.nabs) * 100))
+    ? Math.min(100, Math.round((data.ingresoNabsHl / data.objetivos.nabs) * 100))
     : 0
 
   // Pie data for stock by division (top 8)
@@ -201,14 +204,14 @@ export function GerencialClient() {
           <div className="space-y-3">
             <ProgressRow
               label="Cervezas"
-              current={data.stockCervezasHl}
+              current={data.ingresoCervezasHl}
               target={data.objetivos.cervezas}
               percent={progCervezas}
               color="amber"
             />
             <ProgressRow
               label="NABS"
-              current={data.stockNabsHl}
+              current={data.ingresoNabsHl}
               target={data.objetivos.nabs}
               percent={progNabs}
               color="blue"
@@ -264,7 +267,38 @@ export function GerencialClient() {
         </div>
       )}
 
-      {/* Fila 3: Stock por División */}
+      {/* Fila 3: Ingresos acumulados del mes */}
+      {data.ingresos.length > 0 && (
+        <div className="bg-white rounded-xl border p-4">
+          <h3 className="text-sm font-medium text-slate-600 mb-3">
+            Ingresos Acumulados — {mesLabel}
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={data.ingresos} margin={{ left: 10, right: 10, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                dataKey="fecha"
+                tickFormatter={(v) => { const d = v.split("-"); return `${d[2]}/${d[1]}` }}
+                tick={{ fontSize: 11 }}
+              />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip
+                labelFormatter={(v) => { const d = String(v).split("-"); return `${d[2]}/${d[1]}/${d[0]}` }}
+              />
+              <Line type="monotone" dataKey="acumCervezas" name="acumCervezas" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="acumNabs" name="acumNabs" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
+              {data.objetivos.cervezas > 0 && (
+                <ReferenceLine y={data.objetivos.cervezas} stroke="#f59e0b" strokeDasharray="5 5" label={{ value: `Obj Cerv: ${fmtHl(data.objetivos.cervezas)}`, position: "right", fontSize: 10 }} />
+              )}
+              {data.objetivos.nabs > 0 && (
+                <ReferenceLine y={data.objetivos.nabs} stroke="#3b82f6" strokeDasharray="5 5" label={{ value: `Obj NABS: ${fmtHl(data.objetivos.nabs)}`, position: "right", fontSize: 10 }} />
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Fila 4: Stock por División */}
       <div className="grid md:grid-cols-2 gap-4">
         <div className="bg-white rounded-xl border p-4">
           <h3 className="text-sm font-medium text-slate-600 mb-3">Stock por División (HL)</h3>

@@ -1,5 +1,6 @@
 "use server"
 
+import { query } from "@/lib/db"
 import { getVpdChess } from "@/actions/vpd-chess"
 import { getChessStock } from "@/lib/chess"
 import {
@@ -78,6 +79,15 @@ export interface EspecialItem {
   semaforo: "verde" | "amarillo" | "rojo" | "sin-datos"
 }
 
+export interface IngresoDia {
+  fecha: string
+  bultos: number
+  hlCervezas: number
+  hlNabs: number
+  acumCervezas: number
+  acumNabs: number
+}
+
 export interface GerencialData {
   mes: number
   anio: number
@@ -98,6 +108,12 @@ export interface GerencialData {
   // Días de piso
   diasPisoCervezas: number | null
   diasPisoNabs: number | null
+  // Ingresos del mes (cumplimiento objetivos)
+  ingresos: IngresoDia[]
+  ingresoCervezasHl: number
+  ingresoNabsHl: number
+  cumplimientoCervezas: number // porcentaje 0-100
+  cumplimientoNabs: number
   // Especiales
   especiales: Record<CategoriaEspecial, { label: string; items: EspecialItem[]; totalHl: number }>
   timestamp: string
@@ -111,11 +127,26 @@ export async function getGerencialData(
   const m = mes ?? hoy.getMonth() + 1
   const a = anio ?? hoy.getFullYear()
 
-  // Parallel: stock from Chess + VPD 7 days from Chess + objectives
-  const [chessStock, vpd7, objetivos] = await Promise.all([
+  // Date range for current month
+  const mesStr = String(m).padStart(2, "0")
+  const fechaDesde = `${a}-${mesStr}-01`
+  const siguienteMes = m === 12 ? `${a + 1}-01-01` : `${a}-${String(m + 1).padStart(2, "0")}-01`
+
+  // Parallel: stock from Chess + VPD 7 days + objectives + ingresos from WMS
+  const [chessStock, vpd7, objetivos, ingresosRaw] = await Promise.all([
     getChessStock(),
     getVpdChess(7),
     getObjetivos(m, a),
+    query<{ fecha: string; art: string; bultos: number }>(`
+      SELECT CONVERT(varchar, c.PltFchIngreso, 23) as fecha,
+        RTRIM(d.ArtCod) as art,
+        SUM(d.PltPUBQty) as bultos
+      FROM PLTCBC c
+      INNER JOIN PLTDTL d ON RTRIM(c.PltCod) = RTRIM(d.PltCod)
+      WHERE c.PltFchIngreso >= @fechaDesde AND c.PltFchIngreso < @siguienteMes
+      GROUP BY CONVERT(varchar, c.PltFchIngreso, 23), d.ArtCod
+      ORDER BY fecha
+    `, { fechaDesde, siguienteMes }),
   ])
 
   // Aggregate Chess stock by article (may have multiple lines per article/lote/deposito)
@@ -233,6 +264,43 @@ export async function getGerencialData(
     }
   }
 
+  // Ingresos del mes (PLTCBC + PLTDTL from WMS)
+  const ingDiaMap = new Map<string, { bultos: number; hlCerv: number; hlNabs: number }>()
+  let ingresoCervezasHl = 0
+  let ingresoNabsHl = 0
+
+  for (const r of ingresosRaw) {
+    const art = r.art?.trim()
+    if (!art || !esMercaderia(art)) continue
+    const hl = bultosToHl(art, r.bultos)
+    const clasif = clasificacion(art)
+    const existing = ingDiaMap.get(r.fecha) || { bultos: 0, hlCerv: 0, hlNabs: 0 }
+    existing.bultos += r.bultos
+    if (clasif === "cervezas") { existing.hlCerv += hl; ingresoCervezasHl += hl }
+    if (clasif === "nabs") { existing.hlNabs += hl; ingresoNabsHl += hl }
+    ingDiaMap.set(r.fecha, existing)
+  }
+
+  ingresoCervezasHl = Math.round(ingresoCervezasHl * 10) / 10
+  ingresoNabsHl = Math.round(ingresoNabsHl * 10) / 10
+
+  let acumC = 0, acumN = 0
+  const ingresos: IngresoDia[] = [...ingDiaMap.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([fecha, d]) => {
+    acumC += d.hlCerv
+    acumN += d.hlNabs
+    return {
+      fecha,
+      bultos: d.bultos,
+      hlCervezas: Math.round(d.hlCerv * 10) / 10,
+      hlNabs: Math.round(d.hlNabs * 10) / 10,
+      acumCervezas: Math.round(acumC * 10) / 10,
+      acumNabs: Math.round(acumN * 10) / 10,
+    }
+  })
+
+  const cumplimientoCervezas = objetivos.cervezas > 0 ? Math.round((ingresoCervezasHl / objetivos.cervezas) * 1000) / 10 : 0
+  const cumplimientoNabs = objetivos.nabs > 0 ? Math.round((ingresoNabsHl / objetivos.nabs) * 1000) / 10 : 0
+
   return {
     mes: m,
     anio: a,
@@ -249,6 +317,11 @@ export async function getGerencialData(
     vpmNabs,
     diasPisoCervezas,
     diasPisoNabs,
+    ingresos,
+    ingresoCervezasHl,
+    ingresoNabsHl,
+    cumplimientoCervezas,
+    cumplimientoNabs,
     especiales,
     timestamp: new Date().toISOString(),
   }
