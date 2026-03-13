@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { getFefoData, type FefoData } from "@/actions/fefo"
 import { KpiCard } from "@/components/kpi-card"
 import { AlertTriangle, RefreshCw, ShieldAlert, Building2 } from "lucide-react"
+import { DivisionBadge } from "@/components/division-badge"
 import {
   BarChart,
   Bar,
@@ -18,6 +19,7 @@ export function FefoClient() {
   const [data, setData] = useState<FefoData | null>(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+  const [divFilter, setDivFilter] = useState("TODAS")
 
   async function load() {
     setLoading(true)
@@ -35,7 +37,10 @@ export function FefoClient() {
     return () => clearInterval(interval)
   }, [])
 
+  const divisiones = [...new Set((data?.violations || []).map((v) => v.division).filter(Boolean))].sort()
+
   const filtered = data?.violations.filter((v) => {
+    if (divFilter !== "TODAS" && v.division !== divFilter) return false
     if (!search) return true
     const s = search.toLowerCase()
     return (
@@ -126,14 +131,26 @@ export function FefoClient() {
             </div>
           )}
 
-          {/* Search */}
-          <input
-            type="text"
-            placeholder="Buscar por artículo o empresa..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full max-w-md px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-700 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-          />
+          {/* Search + Division filter */}
+          <div className="flex items-center gap-3">
+            <input
+              type="text"
+              placeholder="Buscar por artículo o empresa..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="flex-1 max-w-md px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-700 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            />
+            <select
+              value={divFilter}
+              onChange={(e) => setDivFilter(e.target.value)}
+              className="px-2 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-700"
+            >
+              <option value="TODAS">Todas las divisiones</option>
+              {divisiones.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
 
           {/* Table */}
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
@@ -143,6 +160,7 @@ export function FefoClient() {
                   <tr className="border-b border-slate-100 bg-slate-50">
                     <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">#</th>
                     <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">Empresa</th>
+                    <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">División</th>
                     <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">Artículo (Picking)</th>
                     <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">Venc. Picking</th>
                     <th className="text-left px-4 py-3 text-xs text-slate-500 font-semibold">Ubicación Pick.</th>
@@ -157,6 +175,7 @@ export function FefoClient() {
                     <tr key={i} className={`border-b border-slate-50 hover:bg-blue-50/50 transition-colors ${v.diasDiferencia > 30 ? "bg-red-50/50" : ""}`}>
                       <td className="px-4 py-2.5 text-slate-400 tabular-nums">{i + 1}</td>
                       <td className="px-4 py-2.5 text-slate-700">{v.empresa}</td>
+                      <td className="px-4 py-2.5"><DivisionBadge division={v.division} /></td>
                       <td className="px-4 py-2.5 text-slate-800 font-mono text-xs">{v.pickingArticulo}</td>
                       <td className="px-4 py-2.5 text-red-600 tabular-nums font-medium">{v.pickingVencimiento}</td>
                       <td className="px-4 py-2.5 text-slate-500 text-xs">{v.pickingUbicacion}</td>

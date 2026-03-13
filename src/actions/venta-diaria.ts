@@ -1,6 +1,7 @@
 "use server"
 
 import { chessGet } from "@/lib/chess"
+import { getSkuInfo } from "@/lib/sku"
 
 // Campos que devuelve Chess en dsReporteComprobantesApi.VentasResumen
 interface VentaLineaRaw {
@@ -48,6 +49,8 @@ export interface SkuVentaDiaria {
   promedioDiario: number
   diasConVenta: number
   frecuencia: number // diasConVenta / dias totales
+  division: string
+  marca: string
 }
 
 export interface VentaDiariaData {
@@ -177,6 +180,7 @@ export async function getVentaDiariaData(diasAtras: number = 30): Promise<VentaD
     const diasConVenta = data.fechas.size
     const frecuencia = diasRango > 0 ? diasConVenta / diasRango : 0
 
+    const skuInfo = getSkuInfo(idArticulo)
     return {
       idArticulo,
       dsArticulo: data.dsArticulo,
@@ -187,6 +191,8 @@ export async function getVentaDiariaData(diasAtras: number = 30): Promise<VentaD
       promedioDiario,
       diasConVenta,
       frecuencia,
+      division: skuInfo?.division ?? "",
+      marca: skuInfo?.marca ?? "",
     }
   })
 

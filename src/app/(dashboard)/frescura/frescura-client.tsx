@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
+import { DivisionBadge } from "@/components/division-badge"
 
 type SemaforoPiso = "verde" | "amarillo" | "rojo" | "sin-datos"
 
@@ -40,6 +41,7 @@ export function FrescuraClient() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [deposito, setDeposito] = useState("TODOS")
+  const [divFilter, setDivFilter] = useState("TODAS")
 
   const loadData = useCallback(async (dep?: string) => {
     try {
@@ -96,7 +98,11 @@ export function FrescuraClient() {
     return Math.round((r.bultosTotal / vpd) * 10) / 10
   }
 
+  const divisiones = [...new Set((data?.resumen || []).map((r) => r.division).filter(Boolean))].sort()
+
   const filtered = (data?.resumen || []).filter((r) => {
+    if (divFilter !== "TODAS" && r.division !== divFilter) return false
+
     const matchSearch =
       !search ||
       r.articulo.toLowerCase().includes(search.toLowerCase()) ||
@@ -208,9 +214,19 @@ export function FrescuraClient() {
               />
             </div>
 
-            {/* Search */}
+            {/* Search + Division Filter */}
             <div className="flex items-center gap-3">
               <Input placeholder="Buscar artículo o descripción..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm bg-white" />
+              <select
+                value={divFilter}
+                onChange={(e) => setDivFilter(e.target.value)}
+                className="px-2 py-1.5 text-sm bg-white border border-slate-200 rounded-lg text-slate-700 shadow-sm"
+              >
+                <option value="TODAS">Todas las divisiones</option>
+                {divisiones.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
               <span className="text-sm text-slate-400">{filtered.length} de {data.resumen.length} productos</span>
             </div>
 
@@ -235,6 +251,8 @@ export function FrescuraClient() {
                           <TableHead className="w-20">Estado</TableHead>
                           <TableHead>Artículo</TableHead>
                           <TableHead className="max-w-[200px]">Descripción</TableHead>
+                          <TableHead>División</TableHead>
+                          <TableHead>Marca</TableHead>
                           <TableHead className="text-center">Días Venc.</TableHead>
                           <TableHead className="text-center">Vencimiento</TableHead>
                           <TableHead className="text-right">VPD</TableHead>
@@ -272,6 +290,8 @@ export function FrescuraClient() {
                                   {r.articulo}
                                 </TableCell>
                                 <TableCell className="text-sm max-w-[200px] truncate text-slate-600">{r.descripcion}</TableCell>
+                                <TableCell><DivisionBadge division={r.division} /></TableCell>
+                                <TableCell className="text-xs text-slate-500 max-w-[100px] truncate">{r.marca}</TableCell>
                                 <TableCell className="text-center">
                                   <span className={`font-bold text-lg ${diasColor(r.diasRestantes)}`}>{r.diasRestantes}</span>
                                 </TableCell>
@@ -305,7 +325,7 @@ export function FrescuraClient() {
 
                               {isExpanded && (
                                 <TableRow key={`detail-${r.articulo}`} className="bg-slate-50">
-                                  <TableCell colSpan={16} className="p-0">
+                                  <TableCell colSpan={18} className="p-0">
                                     <div className="px-8 py-3 border-y border-slate-200">
                                       <div className="flex items-center justify-between mb-2">
                                         <p className="text-xs font-semibold text-slate-500">
@@ -359,7 +379,7 @@ export function FrescuraClient() {
                         })}
                         {filtered.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={16} className="text-center py-8 text-slate-400">
+                            <TableCell colSpan={18} className="text-center py-8 text-slate-400">
                               No se encontraron productos
                             </TableCell>
                           </TableRow>

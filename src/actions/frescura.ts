@@ -1,7 +1,7 @@
 "use server"
 
 import { query } from "@/lib/db"
-import upbMap from "@/data/upb-map.json"
+import { getUnidadesPorBulto, getSkuInfo } from "@/lib/sku"
 
 export interface ContenedorDetail {
   contenedor: string
@@ -29,6 +29,9 @@ export interface FrescuraResumen {
   fechaIngreso: string
   diasEnDeposito: number
   contenedores: ContenedorDetail[]
+  division: string
+  marca: string
+  unidadNegocio: string
 }
 
 export interface FrescuraData {
@@ -85,7 +88,7 @@ export async function getFrescuraData(deposito?: string): Promise<FrescuraData> 
     ? rows.filter((r) => (r.Deposito || "").trim() === deposito)
     : rows
 
-  const upb$ = upbMap as Record<string, number>
+  // SKU master replaces upb-map.json
 
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
@@ -113,7 +116,7 @@ export async function getFrescuraData(deposito?: string): Promise<FrescuraData> 
     const unidades = r.Cantidad || 0
     if (unidades <= 0) continue
 
-    const upb = upb$[articulo] || 1
+    const upb = getUnidadesPorBulto(articulo)
     const bultos = upb > 1 ? Math.round((unidades / upb) * 100) / 100 : unidades
     const vencStr = venc.toISOString().slice(0, 10)
 
@@ -170,6 +173,7 @@ export async function getFrescuraData(deposito?: string): Promise<FrescuraData> 
   const resumen: FrescuraResumen[] = Array.from(artMap.entries())
     .map(([articulo, d]) => {
       const upb = d.unidadesPorBulto
+      const skuInfo = getSkuInfo(articulo)
       return {
         articulo,
         descripcion: d.descripcion,
@@ -185,6 +189,9 @@ export async function getFrescuraData(deposito?: string): Promise<FrescuraData> 
         fechaIngreso: d.fechaIngreso,
         diasEnDeposito: d.diasEnDeposito,
         contenedores: d.contenedores.sort((a, b) => a.diasRestantes - b.diasRestantes),
+        division: skuInfo?.division ?? "",
+        marca: skuInfo?.marca ?? "",
+        unidadNegocio: skuInfo?.unidadNegocio ?? "",
       }
     })
     .sort((a, b) => a.diasRestantes - b.diasRestantes)

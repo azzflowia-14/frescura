@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
+import { DivisionBadge } from "@/components/division-badge"
 
 type SortKey = "promedioDiario" | "ventaNeta" | "totalBultos" | "totalRechazos" | "diasConVenta" | "frecuencia" | "dsArticulo"
 type SortDir = "asc" | "desc"
@@ -51,6 +52,7 @@ export function VentaDiariaClient() {
   const [sortKey, setSortKey] = useState<SortKey>("promedioDiario")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  const [divFilter, setDivFilter] = useState("TODAS")
 
   const loadData = useCallback(async (dias: number) => {
     try {
@@ -81,7 +83,10 @@ export function VentaDiariaClient() {
     }
   }
 
+  const divisiones = [...new Set((data?.skus || []).map((s) => s.division).filter(Boolean))].sort()
+
   const filtered = (data?.skus || []).filter((s) => {
+    if (divFilter !== "TODAS" && s.division !== divFilter) return false
     if (!search) return true
     const q = search.toLowerCase()
     return s.idArticulo.toLowerCase().includes(q) || s.dsArticulo.toLowerCase().includes(q)
@@ -208,14 +213,24 @@ export function VentaDiariaClient() {
               </Card>
             </div>
 
-            {/* Search + count */}
-            <div className="flex items-center gap-3">
+            {/* Search + Division filter + count */}
+            <div className="flex items-center gap-3 flex-wrap">
               <Input
                 placeholder="Buscar articulo..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="max-w-sm"
               />
+              <select
+                value={divFilter}
+                onChange={(e) => setDivFilter(e.target.value)}
+                className="px-2 py-1.5 text-sm bg-white border border-slate-200 rounded-lg text-slate-700"
+              >
+                <option value="TODAS">Todas las divisiones</option>
+                {divisiones.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
               <span className="text-xs text-muted-foreground">
                 {sorted.length} articulos | {data.totalRegistros} lineas de venta
               </span>
@@ -234,6 +249,7 @@ export function VentaDiariaClient() {
                       </button>
                     </TableHead>
                     <TableHead>Descripcion</TableHead>
+                    <TableHead>División</TableHead>
                     <TableHead className="text-right">
                       <button onClick={() => handleSort("totalBultos")} className="flex items-center justify-end hover:text-foreground w-full">
                         Total Bultos<SortIcon col="totalBultos" />
@@ -269,7 +285,7 @@ export function VentaDiariaClient() {
                 <TableBody>
                   {sorted.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                         {loading ? "Cargando datos de Chess ERP..." : "Sin resultados"}
                       </TableCell>
                     </TableRow>
@@ -279,6 +295,7 @@ export function VentaDiariaClient() {
                         <TableCell className="text-center text-muted-foreground text-xs">{idx + 1}</TableCell>
                         <TableCell className="font-mono text-sm">{sku.idArticulo}</TableCell>
                         <TableCell className="text-sm max-w-[300px] truncate">{sku.dsArticulo}</TableCell>
+                        <TableCell><DivisionBadge division={sku.division} /></TableCell>
                         <TableCell className="text-right font-medium">{fmt(sku.totalBultos, 0)}</TableCell>
                         <TableCell className="text-right text-red-500">{sku.totalRechazos > 0 ? fmt(sku.totalRechazos, 0) : "-"}</TableCell>
                         <TableCell className="text-right font-medium text-green-500">{fmt(sku.ventaNeta, 0)}</TableCell>

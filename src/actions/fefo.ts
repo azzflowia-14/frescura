@@ -1,6 +1,7 @@
 "use server"
 
 import { query } from "@/lib/db"
+import { getSkuInfo } from "@/lib/sku"
 
 export interface FefoViolation {
   tipo: string
@@ -24,6 +25,7 @@ export interface FefoViolation {
   almacenEstado: string
   // Calculados
   diasDiferencia: number
+  division: string
 }
 
 export interface FefoData {
@@ -32,6 +34,7 @@ export interface FefoData {
     total: number
     porEmpresa: Record<string, number>
     porArticulo: Record<string, number>
+    porDivision: Record<string, number>
   }
   timestamp: string
   error?: string
@@ -48,7 +51,7 @@ export async function getFefoData(): Promise<FefoData> {
     if (rows.length === 0) {
       return {
         violations: [],
-        totales: { total: 0, porEmpresa: {}, porArticulo: {} },
+        totales: { total: 0, porEmpresa: {}, porArticulo: {}, porDivision: {} },
         timestamp: new Date().toISOString(),
       }
     }
@@ -83,26 +86,29 @@ export async function getFefoData(): Promise<FefoData> {
         almacenCantidad: Number(r[cols[15]] || 0),
         almacenEstado: String(r[cols[16]] || ""),
         diasDiferencia: diasDif,
+        division: getSkuInfo(String(r[cols[4]] || "").trim())?.division ?? "",
       }
     })
 
     const porEmpresa: Record<string, number> = {}
     const porArticulo: Record<string, number> = {}
+    const porDivision: Record<string, number> = {}
     for (const v of violations) {
       porEmpresa[v.empresa] = (porEmpresa[v.empresa] || 0) + 1
       const art = v.pickingArticulo || v.almacenArticulo
       if (art) porArticulo[art] = (porArticulo[art] || 0) + 1
+      if (v.division) porDivision[v.division] = (porDivision[v.division] || 0) + 1
     }
 
     return {
       violations,
-      totales: { total: violations.length, porEmpresa, porArticulo },
+      totales: { total: violations.length, porEmpresa, porArticulo, porDivision },
       timestamp: new Date().toISOString(),
     }
   } catch (e) {
     return {
       violations: [],
-      totales: { total: 0, porEmpresa: {}, porArticulo: {} },
+      totales: { total: 0, porEmpresa: {}, porArticulo: {}, porDivision: {} },
       timestamp: new Date().toISOString(),
       error: e instanceof Error ? e.message : String(e),
     }

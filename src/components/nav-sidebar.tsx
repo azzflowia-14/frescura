@@ -14,6 +14,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Activity,
+  BookOpen,
+  FileBarChart,
+  BarChart3,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -22,6 +25,9 @@ const navItems = [
   { href: "/frescura", label: "Frescura", icon: Timer },
   { href: "/venta-diaria", label: "Venta Diaria", icon: TrendingUp },
   { href: "/fefo", label: "FEFO Vulnerado", icon: AlertTriangle },
+  { href: "/catalogo", label: "Catálogo", icon: BookOpen },
+  { href: "/gerencial", label: "Gerencial", icon: FileBarChart },
+  { href: "/analisis", label: "Análisis", icon: BarChart3 },
   { href: "/ocupacion", label: "Ocupación", icon: Warehouse },
   { href: "/productividad", label: "Productividad", icon: Users },
   { href: "/despachos", label: "Despachos", icon: Truck },
