@@ -25,6 +25,7 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/frescura", label: "Frescura", icon: Timer },
   { href: "/venta-diaria", label: "Venta Diaria", icon: TrendingUp },
+  { href: "/vpd", label: "VPD Export", icon: FileBarChart },
   { href: "/fefo", label: "FEFO Vulnerado", icon: AlertTriangle },
   { href: "/catalogo", label: "Catálogo", icon: BookOpen },
   { href: "/gerencial", label: "Gerencial", icon: FileBarChart },
