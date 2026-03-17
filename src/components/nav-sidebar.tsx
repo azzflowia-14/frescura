@@ -17,6 +17,7 @@ import {
   BookOpen,
   FileBarChart,
   BarChart3,
+  History,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -28,6 +29,7 @@ const navItems = [
   { href: "/catalogo", label: "Catálogo", icon: BookOpen },
   { href: "/gerencial", label: "Gerencial", icon: FileBarChart },
   { href: "/analisis", label: "Análisis", icon: BarChart3 },
+  { href: "/kardex", label: "Kardex", icon: History },
   { href: "/ocupacion", label: "Ocupación", icon: Warehouse },
   { href: "/productividad", label: "Productividad", icon: Users },
   { href: "/despachos", label: "Despachos", icon: Truck },
