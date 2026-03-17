@@ -19,15 +19,21 @@ import {
 export function DashboardClient() {
   const [data, setData] = useState<DashboardKpis | null>(null)
   const [loading, setLoading] = useState(true)
+  const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0])
 
-  async function load() {
+  async function load(f?: string) {
     setLoading(true)
     try {
-      const result = await getDashboardKpis()
+      const result = await getDashboardKpis(f || fecha)
       setData(result)
     } finally {
       setLoading(false)
     }
+  }
+
+  function handleFechaChange(f: string) {
+    setFecha(f)
+    load(f)
   }
 
   useEffect(() => {
@@ -46,14 +52,22 @@ export function DashboardClient() {
             Vista general en tiempo real — {data?.timestamp ? new Date(data.timestamp).toLocaleString("es-AR") : "Cargando..."}
           </p>
         </div>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 shadow-sm transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          Actualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={fecha}
+            onChange={(e) => handleFechaChange(e.target.value)}
+            className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+          />
+          <button
+            onClick={() => load()}
+            disabled={loading}
+            className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 shadow-sm transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            Actualizar
+          </button>
+        </div>
       </div>
 
       {/* Errores */}

@@ -18,6 +18,7 @@ import {
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DivisionBadge } from "@/components/division-badge"
+import { DateRangePicker } from "@/components/date-range-picker"
 
 type SemaforoPiso = "verde" | "amarillo" | "rojo" | "sin-datos"
 
@@ -43,6 +44,12 @@ export function FrescuraClient() {
   const [deposito, setDeposito] = useState("TODOS")
   const [divFilter, setDivFilter] = useState("TODAS")
 
+  // VPD date range
+  const initHasta = new Date().toISOString().split("T")[0]
+  const initDesde = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0] })()
+  const [vpdDesde, setVpdDesde] = useState(initDesde)
+  const [vpdHasta, setVpdHasta] = useState(initHasta)
+
   const loadData = useCallback(async (dep?: string) => {
     try {
       setError("")
@@ -56,22 +63,30 @@ export function FrescuraClient() {
     }
   }, [deposito])
 
-  const loadVpd = useCallback(async () => {
+  const loadVpd = useCallback(async (desde?: string, hasta?: string) => {
+    const d = desde ?? vpdDesde
+    const h = hasta ?? vpdHasta
     setVpdLoading(true)
     try {
-      const result = await getVpdChess(30)
+      const result = await getVpdChess(30, d, h)
       setVpdData(result)
     } catch {
       // VPD is optional, don't block the page
     } finally {
       setVpdLoading(false)
     }
-  }, [])
+  }, [vpdDesde, vpdHasta])
 
   function handleDepositoChange(dep: string) {
     setDeposito(dep)
     setLoading(true)
     loadData(dep)
+  }
+
+  function handleVpdRangeChange(desde: string, hasta: string) {
+    setVpdDesde(desde)
+    setVpdHasta(hasta)
+    loadVpd(desde, hasta)
   }
 
   useEffect(() => {
@@ -146,7 +161,7 @@ export function FrescuraClient() {
               <span className="text-xs text-slate-400">VPD {vpdData.diasRango}d</span>
             )}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <select
               value={deposito}
               onChange={(e) => handleDepositoChange(e.target.value)}
@@ -167,6 +182,12 @@ export function FrescuraClient() {
             {lastUpdate && (
               <span className="text-xs text-slate-400">{lastUpdate.toLocaleTimeString("es-AR")}</span>
             )}
+          </div>
+        </div>
+        <div className="mx-auto max-w-[1800px] px-4 pt-2 pb-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500 font-medium">VPD rango:</span>
+            <DateRangePicker desde={vpdDesde} hasta={vpdHasta} onChange={handleVpdRangeChange} loading={vpdLoading} />
           </div>
         </div>
       </header>

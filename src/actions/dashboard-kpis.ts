@@ -31,9 +31,9 @@ export interface DashboardKpis {
   errors: string[]
 }
 
-export async function getDashboardKpis(): Promise<DashboardKpis> {
+export async function getDashboardKpis(fecha?: string): Promise<DashboardKpis> {
   const errors: string[] = []
-  const hoy = new Date().toISOString().split("T")[0]
+  const hoy = fecha || new Date().toISOString().split("T")[0]
 
   // Ejecutar todas las queries en paralelo
   const [stockRes, fefoRes, ocupRes, despRes, prodRes, sinStockRes, clientesRes] = await Promise.allSettled([

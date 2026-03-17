@@ -73,21 +73,34 @@ function diffDays(from: string, to: string): number {
   return Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24)) + 1
 }
 
-export async function getVentaDiariaData(diasAtras: number = 30): Promise<VentaDiariaData> {
+export async function getVentaDiariaData(
+  diasAtras: number = 30,
+  customDesde?: string,
+  customHasta?: string,
+): Promise<VentaDiariaData> {
   const hoy = new Date()
-  const desde = new Date(hoy)
-  desde.setDate(desde.getDate() - diasAtras)
 
-  const fechaDesde = formatDate(desde)
-  const fechaHasta = formatDate(hoy)
+  let fechaDesde: string
+  let fechaHasta: string
+
+  if (customDesde && customHasta) {
+    fechaDesde = customDesde
+    fechaHasta = customHasta
+  } else {
+    const desde = new Date(hoy)
+    desde.setDate(desde.getDate() - diasAtras)
+    fechaDesde = formatDate(desde)
+    fechaHasta = formatDate(hoy)
+  }
+
   const diasRango = diffDays(fechaDesde, fechaHasta)
 
   // Consultar Chess día por día (mismo patrón que mercosur-region-pampeana)
   const allLines: VentaLineaRaw[] = []
 
   try {
-    const currentDate = new Date(desde)
-    const endDate = new Date(hoy)
+    const currentDate = new Date(fechaDesde + "T00:00:00")
+    const endDate = new Date(fechaHasta + "T00:00:00")
 
     while (currentDate <= endDate) {
       const fechaStr = formatDate(currentDate)

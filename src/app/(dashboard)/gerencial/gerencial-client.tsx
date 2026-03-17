@@ -64,6 +64,11 @@ function fmtDias(n: number | null): string {
   return n.toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 }
 
+const MESES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+]
+
 export function GerencialClient() {
   const [data, setData] = useState<GerencialData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -72,29 +77,41 @@ export function GerencialClient() {
   const [showObjModal, setShowObjModal] = useState(false)
   const [objCervezas, setObjCervezas] = useState("")
   const [objNabs, setObjNabs] = useState("")
+  const [selMes, setSelMes] = useState(new Date().getMonth() + 1)
+  const [selAnio, setSelAnio] = useState(new Date().getFullYear())
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (mes?: number, anio?: number) => {
     setLoading(true)
     try {
-      const d = await getGerencialData()
+      const d = await getGerencialData(mes ?? selMes, anio ?? selAnio)
       setData(d)
       setObjCervezas(String(d.objetivos.cervezas || ""))
       setObjNabs(String(d.objetivos.nabs || ""))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [selMes, selAnio])
 
   useEffect(() => {
     load()
   }, [load])
+
+  function handleMesChange(mes: number) {
+    setSelMes(mes)
+    load(mes, selAnio)
+  }
+
+  function handleAnioChange(anio: number) {
+    setSelAnio(anio)
+    load(selMes, anio)
+  }
 
   async function handleSaveObj() {
     if (!data) return
     setSaving(true)
     try {
       await saveObjetivos(data.mes, data.anio, Number(objCervezas) || 0, Number(objNabs) || 0)
-      await load()
+      await load(data.mes, data.anio)
       setShowObjModal(false)
     } finally {
       setSaving(false)
@@ -129,17 +146,40 @@ export function GerencialClient() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-800">Informe Gerencial</h1>
           <p className="text-sm text-slate-500 capitalize">{mesLabel}</p>
         </div>
-        <button
-          onClick={load}
-          className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
-        >
-          <RefreshCw className="w-3.5 h-3.5" /> Actualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <select
+            value={selMes}
+            onChange={(e) => handleMesChange(Number(e.target.value))}
+            disabled={loading}
+            className="px-2 py-1.5 text-sm bg-white border border-slate-200 rounded-lg text-slate-700 shadow-sm"
+          >
+            {MESES.map((m, i) => (
+              <option key={i + 1} value={i + 1}>{m}</option>
+            ))}
+          </select>
+          <select
+            value={selAnio}
+            onChange={(e) => handleAnioChange(Number(e.target.value))}
+            disabled={loading}
+            className="px-2 py-1.5 text-sm bg-white border border-slate-200 rounded-lg text-slate-700 shadow-sm"
+          >
+            {[2025, 2026, 2027].map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => load()}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Actualizar
+          </button>
+        </div>
       </div>
 
       {/* Fila 1: KPIs */}

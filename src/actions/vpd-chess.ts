@@ -34,15 +34,29 @@ export interface VpdData {
   error?: string
 }
 
-export async function getVpdChess(diasAtras: number = 30): Promise<VpdData> {
+export async function getVpdChess(
+  diasAtras: number = 30,
+  fechaDesde?: string,
+  fechaHasta?: string,
+): Promise<VpdData> {
   const hoy = new Date()
-  const desde = new Date(hoy)
-  desde.setDate(desde.getDate() - diasAtras)
+
+  let startDate: Date
+  let endDate: Date
+
+  if (fechaDesde && fechaHasta) {
+    startDate = new Date(fechaDesde + "T00:00:00")
+    endDate = new Date(fechaHasta + "T00:00:00")
+  } else {
+    endDate = hoy
+    startDate = new Date(hoy)
+    startDate.setDate(startDate.getDate() - diasAtras)
+  }
 
   // Generar lista de fechas
   const dates: string[] = []
-  const current = new Date(desde)
-  while (current <= hoy) {
+  const current = new Date(startDate)
+  while (current <= endDate) {
     dates.push(current.toISOString().split("T")[0])
     current.setDate(current.getDate() + 1)
   }

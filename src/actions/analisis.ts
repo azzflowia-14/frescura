@@ -31,10 +31,14 @@ export interface AnalisisData {
   timestamp: string
 }
 
-export async function getAnalisisData(): Promise<AnalisisData> {
+export async function getAnalisisData(
+  diasVpd: number = 30,
+  fechaDesde?: string,
+  fechaHasta?: string,
+): Promise<AnalisisData> {
   const [chessStock, vpd30] = await Promise.all([
     getChessStock(),
-    getVpdChess(30),
+    getVpdChess(diasVpd, fechaDesde, fechaHasta),
   ])
 
   const hoy = new Date()

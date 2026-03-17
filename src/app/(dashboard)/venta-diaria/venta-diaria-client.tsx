@@ -53,12 +53,15 @@ export function VentaDiariaClient() {
   const [sortDir, setSortDir] = useState<SortDir>("desc")
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [divFilter, setDivFilter] = useState("TODAS")
+  const [customMode, setCustomMode] = useState(false)
+  const [customDesde, setCustomDesde] = useState("")
+  const [customHasta, setCustomHasta] = useState("")
 
-  const loadData = useCallback(async (dias: number) => {
+  const loadData = useCallback(async (dias: number, desde?: string, hasta?: string) => {
     try {
       setLoading(true)
       setError("")
-      const result = await getVentaDiariaData(dias)
+      const result = await getVentaDiariaData(dias, desde, hasta)
       if (result.error) {
         setError(result.error)
       } else {
@@ -72,7 +75,9 @@ export function VentaDiariaClient() {
     }
   }, [])
 
-  useEffect(() => { loadData(periodo) }, [loadData, periodo])
+  useEffect(() => {
+    if (!customMode) loadData(periodo)
+  }, [loadData, periodo, customMode])
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -155,14 +160,54 @@ export function VentaDiariaClient() {
           {PERIODOS.map((p) => (
             <Button
               key={p.value}
-              variant={periodo === p.value ? "default" : "outline"}
+              variant={!customMode && periodo === p.value ? "default" : "outline"}
               size="sm"
-              onClick={() => setPeriodo(p.value)}
+              onClick={() => { setCustomMode(false); setPeriodo(p.value) }}
               disabled={loading}
             >
               {p.label}
             </Button>
           ))}
+          <Button
+            variant={customMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setCustomMode(true)
+              if (!customDesde) {
+                const d = new Date(); d.setDate(d.getDate() - 30)
+                setCustomDesde(d.toISOString().split("T")[0])
+              }
+              if (!customHasta) setCustomHasta(new Date().toISOString().split("T")[0])
+            }}
+            disabled={loading}
+          >
+            Personalizado
+          </Button>
+          {customMode && (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={customDesde}
+                onChange={(e) => setCustomDesde(e.target.value)}
+                className="px-2 py-1 text-xs bg-white border border-slate-200 rounded-lg text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+              <span className="text-xs text-muted-foreground">—</span>
+              <input
+                type="date"
+                value={customHasta}
+                onChange={(e) => setCustomHasta(e.target.value)}
+                className="px-2 py-1 text-xs bg-white border border-slate-200 rounded-lg text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => loadData(30, customDesde, customHasta)}
+                disabled={loading || !customDesde || !customHasta}
+              >
+                Buscar
+              </Button>
+            </div>
+          )}
           {data && (
             <span className="text-xs text-muted-foreground ml-2">
               {fmtDate(data.fechaDesde)} — {fmtDate(data.fechaHasta)} ({data.diasRango} dias)

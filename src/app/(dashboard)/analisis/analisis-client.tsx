@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   CheckCircle,
 } from "lucide-react"
+import { DateRangePicker } from "@/components/date-range-picker"
 import {
   BarChart,
   Bar,
@@ -68,8 +69,26 @@ export function AnalisisClient() {
   const [divFilter, setDivFilter] = useState("TODAS")
   const [search, setSearch] = useState("")
 
+  const initHasta = new Date().toISOString().split("T")[0]
+  const initDesde = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0] })()
+  const [vpdDesde, setVpdDesde] = useState(initDesde)
+  const [vpdHasta, setVpdHasta] = useState(initHasta)
+
+  function loadData(desde?: string, hasta?: string) {
+    setLoading(true)
+    const d = desde ?? vpdDesde
+    const h = hasta ?? vpdHasta
+    getAnalisisData(30, d, h).then((result) => { setData(result); setLoading(false) })
+  }
+
+  function handleVpdRangeChange(desde: string, hasta: string) {
+    setVpdDesde(desde)
+    setVpdHasta(hasta)
+    loadData(desde, hasta)
+  }
+
   useEffect(() => {
-    getAnalisisData().then((d) => { setData(d); setLoading(false) })
+    loadData()
   }, [])
 
   const divisiones = useMemo(() => {
@@ -119,9 +138,22 @@ export function AnalisisClient() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-slate-800">Análisis Cruzado</h1>
-        <p className="text-sm text-slate-500">Stock vs Ventas vs Frescura — {data.totales.analizados} SKUs</p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-slate-800">Análisis Cruzado</h1>
+          <p className="text-sm text-slate-500">Stock vs Ventas vs Frescura — {data.totales.analizados} SKUs</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500 font-medium">VPD rango:</span>
+          <DateRangePicker desde={vpdDesde} hasta={vpdHasta} onChange={handleVpdRangeChange} loading={loading} />
+          <button
+            onClick={() => loadData()}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
