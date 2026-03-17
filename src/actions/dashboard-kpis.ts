@@ -1,12 +1,13 @@
 "use server"
 
 import { query } from "@/lib/db"
+import { getChessStock } from "@/lib/chess"
 
 export interface DashboardKpis {
-  // Stock
+  // Stock (Chess)
   skusEnStock: number
   unidadesTotales: number
-  // Frescura
+  // Frescura (Chess)
   productosVencidos: number
   productosCriticos: number // 0-15 días
   productosUrgentes: number // 16-30 días
@@ -37,12 +38,8 @@ export async function getDashboardKpis(fecha?: string): Promise<DashboardKpis> {
 
   // Ejecutar todas las queries en paralelo
   const [stockRes, fefoRes, ocupRes, despRes, prodRes, sinStockRes, clientesRes] = await Promise.allSettled([
-    // 1. Stock + Frescura
-    query<{ Articulo: string; Vencimiento: string; Cantidad: number }>(`
-      SELECT Articulo, Vencimiento, Cantidad
-      FROM dbo.ConsultaStock
-      WHERE Cantidad > 0
-    `).catch((e) => { errors.push(`Stock: ${e.message}`); return [] }),
+    // 1. Stock Físico desde Chess
+    getChessStock().catch((e) => { errors.push(`Stock Chess: ${e.message}`); return [] }),
 
     // 2. FEFO Vulnerado count
     query<{ cnt: number }>(`
@@ -78,26 +75,41 @@ export async function getDashboardKpis(fecha?: string): Promise<DashboardKpis> {
     `).catch((e) => { errors.push(`Clientes: ${e.message}`); return [{ cnt: 0 }] }),
   ])
 
-  // Process stock + frescura
-  const stockRows = stockRes.status === "fulfilled" ? (stockRes.value as { Articulo: string; Vencimiento: string; Cantidad: number }[]) : []
-  const skus = new Set(stockRows.map((r) => r.Articulo))
-  const unidadesTotales = stockRows.reduce((s, r) => s + (r.Cantidad || 0), 0)
+  // Process stock + frescura from Chess
+  const chessRows = stockRes.status === "fulfilled"
+    ? (stockRes.value as Awaited<ReturnType<typeof getChessStock>>)
+    : []
+
+  const skus = new Set<string>()
+  let unidadesTotales = 0
+  const articulosVencimiento = new Map<string, number>()
 
   const ahora = new Date()
   ahora.setHours(0, 0, 0, 0)
+
+  for (const r of chessRows) {
+    const art = String(r.idArticulo).trim()
+    if (!art) continue
+    const bultos = Number(r.cantBultos) || 0
+    const unidades = Number(r.cantUnidades) || 0
+    if (bultos <= 0 && unidades <= 0) continue
+
+    skus.add(art)
+    unidadesTotales += unidades
+
+    if (r.fecVtoLote) {
+      const venc = parseDate(String(r.fecVtoLote))
+      if (venc) {
+        const dias = Math.ceil((venc.getTime() - ahora.getTime()) / (1000 * 60 * 60 * 24))
+        const prev = articulosVencimiento.get(art)
+        if (prev === undefined || dias < prev) articulosVencimiento.set(art, dias)
+      }
+    }
+  }
+
   let vencidos = 0
   let criticos = 0
   let urgentes = 0
-  const articulosVencimiento = new Map<string, number>()
-  for (const r of stockRows) {
-    if (!r.Vencimiento) continue
-    const venc = parseDate(String(r.Vencimiento))
-    if (!venc) continue
-    const dias = Math.ceil((venc.getTime() - ahora.getTime()) / (1000 * 60 * 60 * 24))
-    const art = r.Articulo
-    const prev = articulosVencimiento.get(art)
-    if (prev === undefined || dias < prev) articulosVencimiento.set(art, dias)
-  }
   for (const dias of articulosVencimiento.values()) {
     if (dias < 0) vencidos++
     else if (dias <= 15) criticos++
