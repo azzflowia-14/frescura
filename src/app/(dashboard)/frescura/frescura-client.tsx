@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { getFrescuraData, type FrescuraData, type FrescuraResumen } from "@/actions/frescura"
 import { getVpdChess, type VpdData } from "@/actions/vpd-chess"
+import { getPrecios } from "@/actions/precios"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -33,6 +34,7 @@ function calcSemaforo(diasDePiso: number | null, diasRestantes: number): Semafor
 export function FrescuraClient() {
   const [data, setData] = useState<FrescuraData | null>(null)
   const [vpdData, setVpdData] = useState<VpdData | null>(null)
+  const [precios, setPrecios] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [vpdLoading, setVpdLoading] = useState(false)
   const [error, setError] = useState("")
@@ -43,6 +45,9 @@ export function FrescuraClient() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [deposito, setDeposito] = useState("TODOS")
   const [divFilter, setDivFilter] = useState("TODAS")
+  const [showPrecios, setShowPrecios] = useState(false)
+  const [uploadMsg, setUploadMsg] = useState("")
+  const [uploading, setUploading] = useState(false)
 
   // VPD date range
   const initHasta = new Date().toISOString().split("T")[0]
@@ -89,10 +94,18 @@ export function FrescuraClient() {
     loadVpd(desde, hasta)
   }
 
+  const loadPrecios = useCallback(async () => {
+    try {
+      const p = await getPrecios()
+      setPrecios(p)
+    } catch { /* optional */ }
+  }, [])
+
   useEffect(() => {
     loadData()
-    loadVpd() // carga VPD en paralelo
-  }, [loadData, loadVpd])
+    loadVpd()
+    loadPrecios()
+  }, [loadData, loadVpd, loadPrecios])
 
   useEffect(() => {
     if (!autoRefresh) return
@@ -144,6 +157,43 @@ export function FrescuraClient() {
     return calcSemaforo(dp, r.diasRestantes) === "rojo"
   }).length
 
+  function getValorizado(r: FrescuraResumen): number | null {
+    const p = precios[r.articulo]
+    if (!p || p <= 0) return null
+    return r.bultosTotal * p
+  }
+
+  async function handleUploadPrecios(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadMsg("")
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch("/api/precios", { method: "POST", body: fd })
+      const json = await res.json()
+      if (json.ok) {
+        setUploadMsg(`OK: ${json.actualizados} precios actualizados (${json.total} total)`)
+        await loadPrecios()
+      } else {
+        setUploadMsg(`Error: ${json.error}`)
+      }
+    } catch (err) {
+      setUploadMsg(`Error: ${String(err)}`)
+    } finally {
+      setUploading(false)
+      e.target.value = ""
+    }
+  }
+
+  // Totales valorizados
+  const preciosSKUs = Object.keys(precios).length
+  const valorizadoFiltered = filtered.reduce((sum, r) => sum + (getValorizado(r) || 0), 0)
+  const valorizadoVencidos = (data?.resumen || []).filter(r => r.diasRestantes < 0).reduce((sum, r) => sum + (getValorizado(r) || 0), 0)
+  const valorizadoCriticos = (data?.resumen || []).filter(r => r.diasRestantes >= 0 && r.diasRestantes <= 15).reduce((sum, r) => sum + (getValorizado(r) || 0), 0)
+  const valorizadoUrgentes = (data?.resumen || []).filter(r => r.diasRestantes > 15 && r.diasRestantes <= 30).reduce((sum, r) => sum + (getValorizado(r) || 0), 0)
+
   function toggleExpand(articulo: string) {
     setExpanded(expanded === articulo ? null : articulo)
   }
@@ -176,6 +226,9 @@ export function FrescuraClient() {
               <label className="text-xs text-slate-500">Auto:</label>
               <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} className="accent-blue-600" />
             </div>
+            <Button variant="outline" size="sm" onClick={() => setShowPrecios(!showPrecios)} className={showPrecios ? "border-purple-400 text-purple-700" : ""}>
+              {preciosSKUs > 0 ? `$ Precios (${preciosSKUs})` : "$ Precios"}
+            </Button>
             <Button variant="outline" size="sm" onClick={() => { loadData(); loadVpd() }} disabled={loading}>
               {loading ? "Cargando..." : "Refrescar"}
             </Button>
@@ -190,6 +243,27 @@ export function FrescuraClient() {
             <DateRangePicker desde={vpdDesde} hasta={vpdHasta} onChange={handleVpdRangeChange} loading={vpdLoading} />
           </div>
         </div>
+        {showPrecios && (
+          <div className="mx-auto max-w-[1800px] px-4 py-2 border-t border-slate-100">
+            <div className="flex items-center gap-4 flex-wrap">
+              <label className="text-xs text-slate-500 font-medium">Subir Excel de precios:</label>
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleUploadPrecios}
+                disabled={uploading}
+                className="text-sm file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-purple-100 file:text-purple-700 hover:file:bg-purple-200"
+              />
+              {uploading && <span className="text-xs text-purple-500 animate-pulse">Procesando...</span>}
+              {uploadMsg && (
+                <span className={`text-xs ${uploadMsg.startsWith("OK") ? "text-emerald-600" : "text-red-600"}`}>{uploadMsg}</span>
+              )}
+              {preciosSKUs > 0 && (
+                <span className="text-xs text-slate-400">{preciosSKUs} SKUs con precio cargado</span>
+              )}
+            </div>
+          </div>
+        )}
       </header>
 
       <main className="mx-auto max-w-[1800px] px-4 py-6 space-y-6">
@@ -235,6 +309,36 @@ export function FrescuraClient() {
               />
             </div>
 
+            {/* Valorizado */}
+            {preciosSKUs > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Card className="border-purple-200 bg-purple-50/50">
+                  <CardContent className="p-3">
+                    <p className="text-xs text-purple-500">Valorizado (filtro actual)</p>
+                    <p className="text-xl font-bold text-purple-700">{fmtMoney(valorizadoFiltered)}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-red-200 bg-red-50/50">
+                  <CardContent className="p-3">
+                    <p className="text-xs text-red-500">Vencidos</p>
+                    <p className="text-xl font-bold text-red-700">{fmtMoney(valorizadoVencidos)}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-red-200 bg-red-50/30">
+                  <CardContent className="p-3">
+                    <p className="text-xs text-red-400">Criticos (0-15d)</p>
+                    <p className="text-xl font-bold text-red-600">{fmtMoney(valorizadoCriticos)}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-amber-200 bg-amber-50/50">
+                  <CardContent className="p-3">
+                    <p className="text-xs text-amber-500">Urgentes (16-30d)</p>
+                    <p className="text-xl font-bold text-amber-700">{fmtMoney(valorizadoUrgentes)}</p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
             {/* Search + Division Filter */}
             <div className="flex items-center gap-3">
               <Input placeholder="Buscar artículo o descripción..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm bg-white" />
@@ -279,6 +383,7 @@ export function FrescuraClient() {
                           <TableHead className="text-right">VPD</TableHead>
                           <TableHead className="text-right">Días Piso</TableHead>
                           <TableHead className="text-right">Bultos Tot.</TableHead>
+                          {preciosSKUs > 0 && <TableHead className="text-right">Valorizado</TableHead>}
                           <TableHead className="text-right">Unid. Tot.</TableHead>
                           <TableHead className="text-center">Ud/Bulto</TableHead>
                           <TableHead className="text-center">Ingreso</TableHead>
@@ -334,6 +439,18 @@ export function FrescuraClient() {
                                   )}
                                 </TableCell>
                                 <TableCell className="text-right font-semibold text-sm text-slate-700">{fmtNum(r.bultosTotal)}</TableCell>
+                                {preciosSKUs > 0 && (
+                                  <TableCell className="text-right text-sm tabular-nums">
+                                    {(() => {
+                                      const val = getValorizado(r)
+                                      return val !== null ? (
+                                        <span className="text-purple-700 font-semibold">{fmtMoney(val)}</span>
+                                      ) : (
+                                        <span className="text-slate-300">—</span>
+                                      )
+                                    })()}
+                                  </TableCell>
+                                )}
                                 <TableCell className="text-right text-sm text-slate-400">{fmtNum(r.unidadesTotal)}</TableCell>
                                 <TableCell className="text-center text-xs text-slate-400">{r.unidadesPorBulto > 1 ? r.unidadesPorBulto : <span className="text-red-400">1?</span>}</TableCell>
                                 <TableCell className="text-center text-sm font-mono text-slate-500">{formatDate(r.fechaIngreso)}</TableCell>
@@ -346,7 +463,7 @@ export function FrescuraClient() {
 
                               {isExpanded && (
                                 <TableRow key={`detail-${r.articulo}`} className="bg-slate-50">
-                                  <TableCell colSpan={18} className="p-0">
+                                  <TableCell colSpan={preciosSKUs > 0 ? 19 : 18} className="p-0">
                                     <div className="px-8 py-3 border-y border-slate-200">
                                       <div className="flex items-center justify-between mb-2">
                                         <p className="text-xs font-semibold text-slate-500">
@@ -400,7 +517,7 @@ export function FrescuraClient() {
                         })}
                         {filtered.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={18} className="text-center py-8 text-slate-400">
+                            <TableCell colSpan={preciosSKUs > 0 ? 19 : 18} className="text-center py-8 text-slate-400">
                               No se encontraron productos
                             </TableCell>
                           </TableRow>
@@ -489,4 +606,10 @@ function formatDate(iso: string): string {
 
 function fmtNum(n: number): string {
   return n.toLocaleString("es-AR", { maximumFractionDigits: 2 })
+}
+
+function fmtMoney(n: number): string {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toLocaleString("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`
+  if (n >= 1_000) return `$${Math.round(n).toLocaleString("es-AR")}`
+  return `$${n.toLocaleString("es-AR", { maximumFractionDigits: 0 })}`
 }
