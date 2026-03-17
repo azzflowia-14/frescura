@@ -91,14 +91,11 @@ export function VpdClient() {
   const conVenta = filtered.filter((s) => s.ventaNeta > 0).length
   const sinVenta = filtered.filter((s) => s.ventaNeta <= 0).length
 
-  // ── Download Excel ──
+  // ── Download Excel via API route (xlsx runs server-side) ──
   async function downloadExcel() {
     if (!data || sorted.length === 0) return
     setDownloading(true)
     try {
-      // Dynamic import xlsx only when needed
-      const XLSX = await import("xlsx")
-
       const rows = sorted.map((s) => ({
         "Cod SKU": s.idArticulo,
         "Descripcion": s.dsArticulo,
@@ -112,29 +109,23 @@ export function VpdClient() {
         "Frecuencia %": Math.round(s.frecuencia * 100),
       }))
 
-      const ws = XLSX.utils.json_to_sheet(rows)
+      const res = await fetch("/api/vpd-export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows, periodo }),
+      })
 
-      // Ancho de columnas
-      ws["!cols"] = [
-        { wch: 10 }, // Cod SKU
-        { wch: 40 }, // Descripcion
-        { wch: 15 }, // Division
-        { wch: 15 }, // Marca
-        { wch: 20 }, // VPD
-        { wch: 18 }, // Venta Neta
-        { wch: 14 }, // Total Bultos
-        { wch: 12 }, // Rechazos
-        { wch: 14 }, // Dias c/Venta
-        { wch: 14 }, // Frecuencia
-      ]
+      if (!res.ok) throw new Error("Error generando Excel")
 
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, `VPD ${periodo} dias`)
-
-      const fileName = `VPD_${periodo}dias_${new Date().toISOString().slice(0, 10)}.xlsx`
-      XLSX.writeFile(wb, fileName)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `VPD_${periodo}dias_${new Date().toISOString().slice(0, 10)}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
     } catch (e) {
-      console.error("Error generando Excel:", e)
+      console.error("Error descargando Excel:", e)
     } finally {
       setDownloading(false)
     }
