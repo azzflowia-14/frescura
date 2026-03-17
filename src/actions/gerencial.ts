@@ -88,6 +88,14 @@ export interface IngresoDia {
   acumNabs: number
 }
 
+export interface IngresoSkuItem {
+  articulo: string
+  descripcion: string
+  bultos: number
+  hl: number
+  clasificacion: "cervezas" | "nabs" | "otro"
+}
+
 export interface GerencialData {
   mes: number
   anio: number
@@ -114,6 +122,8 @@ export interface GerencialData {
   ingresoNabsHl: number
   cumplimientoCervezas: number // porcentaje 0-100
   cumplimientoNabs: number
+  // Ingresos por SKU (para modal detalle)
+  ingresosPorSku: IngresoSkuItem[]
   // Especiales
   especiales: Record<CategoriaEspecial, { label: string; items: EspecialItem[]; totalHl: number }>
   timestamp: string
@@ -266,6 +276,7 @@ export async function getGerencialData(
 
   // Ingresos del mes (PLTCBC + PLTDTL from WMS)
   const ingDiaMap = new Map<string, { bultos: number; hlCerv: number; hlNabs: number }>()
+  const ingSkuMap = new Map<string, { descripcion: string; bultos: number; hl: number; clasificacion: "cervezas" | "nabs" | "otro" }>()
   let ingresoCervezasHl = 0
   let ingresoNabsHl = 0
 
@@ -279,6 +290,16 @@ export async function getGerencialData(
     if (clasif === "cervezas") { existing.hlCerv += hl; ingresoCervezasHl += hl }
     if (clasif === "nabs") { existing.hlNabs += hl; ingresoNabsHl += hl }
     ingDiaMap.set(r.fecha, existing)
+
+    // Acumular por SKU
+    const skuExisting = ingSkuMap.get(art)
+    const info = getSkuInfo(art)
+    if (skuExisting) {
+      skuExisting.bultos += r.bultos
+      skuExisting.hl += hl
+    } else {
+      ingSkuMap.set(art, { descripcion: info?.descripcion ?? art, bultos: r.bultos, hl, clasificacion: clasif })
+    }
   }
 
   ingresoCervezasHl = Math.round(ingresoCervezasHl * 10) / 10
@@ -301,6 +322,16 @@ export async function getGerencialData(
   const cumplimientoCervezas = objetivos.cervezas > 0 ? Math.round((ingresoCervezasHl / objetivos.cervezas) * 1000) / 10 : 0
   const cumplimientoNabs = objetivos.nabs > 0 ? Math.round((ingresoNabsHl / objetivos.nabs) * 1000) / 10 : 0
 
+  const ingresosPorSku: IngresoSkuItem[] = Array.from(ingSkuMap.entries())
+    .map(([articulo, d]) => ({
+      articulo,
+      descripcion: d.descripcion,
+      bultos: Math.round(d.bultos * 100) / 100,
+      hl: Math.round(d.hl * 100) / 100,
+      clasificacion: d.clasificacion,
+    }))
+    .sort((a, b) => b.hl - a.hl)
+
   return {
     mes: m,
     anio: a,
@@ -322,6 +353,7 @@ export async function getGerencialData(
     ingresoNabsHl,
     cumplimientoCervezas,
     cumplimientoNabs,
+    ingresosPorSku,
     especiales,
     timestamp: new Date().toISOString(),
   }

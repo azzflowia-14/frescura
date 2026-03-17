@@ -6,6 +6,7 @@ import {
   saveObjetivos,
   type GerencialData,
   type EspecialItem,
+  type IngresoSkuItem,
 } from "@/actions/gerencial"
 import { KpiCard } from "@/components/kpi-card"
 import { DivisionBadge } from "@/components/division-badge"
@@ -79,6 +80,7 @@ export function GerencialClient() {
   const [objNabs, setObjNabs] = useState("")
   const [selMes, setSelMes] = useState(new Date().getMonth() + 1)
   const [selAnio, setSelAnio] = useState(new Date().getFullYear())
+  const [ingModal, setIngModal] = useState<"cervezas" | "nabs" | null>(null)
 
   const load = useCallback(async (mes?: number, anio?: number) => {
     setLoading(true)
@@ -249,20 +251,26 @@ export function GerencialClient() {
           </div>
         ) : (
           <div className="space-y-3">
-            <ProgressRow
-              label="Cervezas"
-              current={data.ingresoCervezasHl}
-              target={data.objetivos.cervezas}
-              percent={progCervezas}
-              color="amber"
-            />
-            <ProgressRow
-              label="NABS"
-              current={data.ingresoNabsHl}
-              target={data.objetivos.nabs}
-              percent={progNabs}
-              color="blue"
-            />
+            <button className="w-full text-left" onClick={() => setIngModal("cervezas")}>
+              <ProgressRow
+                label="Cervezas"
+                current={data.ingresoCervezasHl}
+                target={data.objetivos.cervezas}
+                percent={progCervezas}
+                color="amber"
+                clickable
+              />
+            </button>
+            <button className="w-full text-left" onClick={() => setIngModal("nabs")}>
+              <ProgressRow
+                label="NABS"
+                current={data.ingresoNabsHl}
+                target={data.objetivos.nabs}
+                percent={progNabs}
+                color="blue"
+                clickable
+              />
+            </button>
           </div>
         )}
       </div>
@@ -516,6 +524,74 @@ export function GerencialClient() {
           </div>
         </div>
       )}
+
+      {/* Modal detalle ingresos por SKU (cumplimiento) */}
+      {ingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setIngModal(null)}>
+          <div className="bg-white rounded-xl p-6 w-full max-w-2xl shadow-xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold">
+                  Ingresos {ingModal === "cervezas" ? "Cervezas" : "NABS"} — {mesLabel}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Detalle por SKU · {fmtHl(ingModal === "cervezas" ? data.ingresoCervezasHl : data.ingresoNabsHl)} HL totales
+                  {ingModal === "cervezas" && data.objetivos.cervezas > 0 && ` · ${progCervezas}% del objetivo`}
+                  {ingModal === "nabs" && data.objetivos.nabs > 0 && ` · ${progNabs}% del objetivo`}
+                </p>
+              </div>
+              <button onClick={() => setIngModal(null)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+            </div>
+            <div className="overflow-auto flex-1">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-slate-50">
+                  <tr className="text-left text-xs text-slate-500 uppercase border-b">
+                    <th className="p-2">#</th>
+                    <th className="p-2">Art.</th>
+                    <th className="p-2">Descripción</th>
+                    <th className="p-2 text-right">Bultos</th>
+                    <th className="p-2 text-right">HL</th>
+                    <th className="p-2 text-right">% del total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {data.ingresosPorSku
+                    .filter((s) => s.clasificacion === ingModal)
+                    .map((s, i) => {
+                      const totalHl = ingModal === "cervezas" ? data.ingresoCervezasHl : data.ingresoNabsHl
+                      const pct = totalHl > 0 ? Math.round((s.hl / totalHl) * 1000) / 10 : 0
+                      return (
+                        <tr key={s.articulo} className="hover:bg-slate-50">
+                          <td className="p-2 text-xs text-slate-400">{i + 1}</td>
+                          <td className="p-2 font-mono text-xs">{s.articulo}</td>
+                          <td className="p-2 max-w-[250px] truncate">{s.descripcion}</td>
+                          <td className="p-2 text-right font-mono text-xs">{s.bultos.toLocaleString("es-AR")}</td>
+                          <td className="p-2 text-right font-mono text-xs font-semibold">{fmtHl(s.hl)}</td>
+                          <td className="p-2 text-right text-xs text-slate-500">{pct}%</td>
+                        </tr>
+                      )
+                    })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-slate-200 font-semibold">
+                    <td className="p-2" colSpan={3}>TOTAL</td>
+                    <td className="p-2 text-right font-mono text-xs">
+                      {data.ingresosPorSku
+                        .filter((s) => s.clasificacion === ingModal)
+                        .reduce((sum, s) => sum + s.bultos, 0)
+                        .toLocaleString("es-AR")}
+                    </td>
+                    <td className="p-2 text-right font-mono text-xs">
+                      {fmtHl(ingModal === "cervezas" ? data.ingresoCervezasHl : data.ingresoNabsHl)}
+                    </td>
+                    <td className="p-2 text-right text-xs">100%</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -526,19 +602,24 @@ function ProgressRow({
   target,
   percent,
   color,
+  clickable,
 }: {
   label: string
   current: number
   target: number
   percent: number
   color: "amber" | "blue"
+  clickable?: boolean
 }) {
   const bg = color === "amber" ? "bg-amber-500" : "bg-blue-500"
   const track = color === "amber" ? "bg-amber-100" : "bg-blue-100"
   return (
-    <div className="space-y-1">
+    <div className={`space-y-1 ${clickable ? "hover:bg-slate-50 rounded-lg p-1.5 -m-1.5 transition-colors cursor-pointer" : ""}`}>
       <div className="flex items-center justify-between text-sm">
-        <span className="font-medium text-slate-700">{label}</span>
+        <span className="font-medium text-slate-700">
+          {label}
+          {clickable && <span className="text-[10px] text-slate-400 ml-1.5">click para detalle</span>}
+        </span>
         <span className="text-xs text-slate-400">
           {fmtHl(current)} / {fmtHl(target)} HL ({percent}%)
         </span>
