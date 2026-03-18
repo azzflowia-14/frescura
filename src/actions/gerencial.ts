@@ -205,15 +205,14 @@ export async function getGerencialData(
       `, { fechaDesde, siguienteMes }),
   ])
 
-  // Ingresos: from kardex REC.DEPOS or from WMS
+  // Ingresos: from kardex (REMITO + REM.CONSIG.) or WMS fallback
   let ingresosRaw: { fecha: string; art: string; bultos: number }[]
   if (kardexData) {
-    // Aggregate REC.DEPOS movements by fecha+art
     const ingMap = new Map<string, number>()
     for (const mov of kardexData.movimientos) {
-      if (mov.concepto !== "REC.DEPOS.") continue
+      if (mov.concepto !== "REMITO" && mov.concepto !== "REM.CONSIG.") continue
       const key = `${mov.fecha}|${mov.codigo}`
-      ingMap.set(key, (ingMap.get(key) || 0) + mov.movBultos)
+      ingMap.set(key, (ingMap.get(key) || 0) + Math.abs(mov.movBultos))
     }
     ingresosRaw = [...ingMap.entries()].map(([key, bultos]) => {
       const [fecha, art] = key.split("|")
@@ -225,16 +224,13 @@ export async function getGerencialData(
 
   // Aggregate stock by article
   const artAgg = new Map<string, { descripcion: string; bultos: number }>()
-
   if (kardexData) {
-    // Stock from kardex saldoFinal
     for (const r of kardexData.resumenArticulos) {
       if (!esMercaderia(r.codigo)) continue
       if (r.saldoFinal <= 0) continue
       artAgg.set(r.codigo, { descripcion: r.descripcion, bultos: r.saldoFinal })
     }
   } else {
-    // Stock from Chess API
     for (const row of chessStock) {
       const art = String(row.idArticulo).trim()
       if (!art) continue
