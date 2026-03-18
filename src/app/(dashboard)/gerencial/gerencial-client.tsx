@@ -83,6 +83,8 @@ export function GerencialClient() {
   const [selMes, setSelMes] = useState(new Date().getMonth() + 1)
   const [selAnio, setSelAnio] = useState(new Date().getFullYear())
   const [ingModal, setIngModal] = useState<"cervezas" | "nabs" | null>(null)
+  const [marcaTipo, setMarcaTipo] = useState<"cervezas" | "nabs">("nabs")
+  const [marcaSel, setMarcaSel] = useState<string>("")
 
   const load = useCallback(async (mes?: number, anio?: number) => {
     setLoading(true)
@@ -496,6 +498,15 @@ export function GerencialClient() {
         </div>
       </div>
 
+      {/* Detalle por Marca — Torta SKUs */}
+      <StockPorMarca
+        stockItems={data.stockItems}
+        tipo={marcaTipo}
+        marcaSel={marcaSel}
+        onTipoChange={(t) => { setMarcaTipo(t); setMarcaSel("") }}
+        onMarcaChange={setMarcaSel}
+      />
+
       {/* Fila 4: Productos Especiales */}
       <div className="bg-white rounded-xl border p-4 space-y-4">
         <h3 className="text-sm font-medium text-slate-600 flex items-center gap-2">
@@ -732,6 +743,156 @@ function ProgressRow({
       <div className={`h-3 rounded-full ${track} overflow-hidden`}>
         <div className={`h-full rounded-full ${bg} transition-all`} style={{ width: `${percent}%` }} />
       </div>
+    </div>
+  )
+}
+
+function StockPorMarca({
+  stockItems,
+  tipo,
+  marcaSel,
+  onTipoChange,
+  onMarcaChange,
+}: {
+  stockItems: GerencialData["stockItems"]
+  tipo: "cervezas" | "nabs"
+  marcaSel: string
+  onTipoChange: (t: "cervezas" | "nabs") => void
+  onMarcaChange: (m: string) => void
+}) {
+  // Get items for selected tipo
+  const items = stockItems.filter((s) => s.clasificacion === tipo && s.hl > 0)
+
+  // Get unique marcas sorted by total HL
+  const marcaHl = new Map<string, number>()
+  for (const s of items) {
+    const m = s.marca || "Sin marca"
+    marcaHl.set(m, (marcaHl.get(m) || 0) + s.hl)
+  }
+  const marcas = Array.from(marcaHl.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([m]) => m)
+
+  // Auto-select first marca if none selected
+  const marca = marcaSel || marcas[0] || ""
+
+  // SKUs for selected marca
+  const skus = items
+    .filter((s) => (s.marca || "Sin marca") === marca)
+    .sort((a, b) => b.hl - a.hl)
+
+  const totalHlMarca = skus.reduce((sum, s) => sum + s.hl, 0)
+
+  return (
+    <div className="bg-white rounded-xl border p-4">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <h3 className="text-sm font-medium text-slate-600">
+          Stock por Marca / SKU (HL)
+        </h3>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border overflow-hidden text-sm">
+            <button
+              onClick={() => onTipoChange("cervezas")}
+              className={`px-3 py-1.5 transition-colors ${tipo === "cervezas" ? "bg-amber-500 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            >
+              Cervezas
+            </button>
+            <button
+              onClick={() => onTipoChange("nabs")}
+              className={`px-3 py-1.5 transition-colors ${tipo === "nabs" ? "bg-blue-500 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+            >
+              NABS
+            </button>
+          </div>
+          <select
+            value={marca}
+            onChange={(e) => onMarcaChange(e.target.value)}
+            className="px-2 py-1.5 text-sm bg-white border border-slate-200 rounded-lg text-slate-700 shadow-sm max-w-[200px]"
+          >
+            {marcas.map((m) => (
+              <option key={m} value={m}>
+                {m} ({fmtHl(marcaHl.get(m) || 0)} HL)
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {skus.length === 0 ? (
+        <p className="text-center text-sm text-slate-400 py-8">Sin datos para esta marca</p>
+      ) : (
+        <div className="grid md:grid-cols-2 gap-4">
+          {/* Pie chart */}
+          <div>
+            <div className="text-center mb-2">
+              <span className="text-lg font-bold text-slate-800">{marca}</span>
+              <span className="text-sm text-slate-400 ml-2">{fmtHl(totalHlMarca)} HL total</span>
+            </div>
+            <ResponsiveContainer width="100%" height={280}>
+              <PieChart>
+                <Pie
+                  data={skus.map((s) => ({ name: s.descripcion, hl: Math.round(s.hl * 100) / 100 }))}
+                  dataKey="hl"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={90}
+                  label={({ name, value }) => {
+                    const short = String(name).length > 25 ? String(name).slice(0, 25) + "..." : name
+                    return `${short}: ${fmtHl(value as number)}`
+                  }}
+                  labelLine={false}
+                >
+                  {skus.map((_, i) => (
+                    <Cell key={i} fill={COLORS_CHART[i % COLORS_CHART.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v) => `${fmtHl(v as number)} HL`} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-auto max-h-[320px]">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-slate-50">
+                <tr className="text-left text-xs text-slate-500 uppercase border-b">
+                  <th className="p-1.5">Art.</th>
+                  <th className="p-1.5">Descripción</th>
+                  <th className="p-1.5 text-right">HL</th>
+                  <th className="p-1.5 text-right">%</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {skus.map((s, i) => {
+                  const pct = totalHlMarca > 0 ? Math.round((s.hl / totalHlMarca) * 1000) / 10 : 0
+                  return (
+                    <tr key={s.articulo} className="hover:bg-slate-50">
+                      <td className="p-1.5 font-mono text-xs">{s.articulo}</td>
+                      <td className="p-1.5 text-xs max-w-[180px] truncate flex items-center gap-1.5">
+                        <span
+                          className="inline-block w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                          style={{ backgroundColor: COLORS_CHART[i % COLORS_CHART.length] }}
+                        />
+                        {s.descripcion}
+                      </td>
+                      <td className="p-1.5 text-right font-mono text-xs font-semibold">{fmtHl(s.hl)}</td>
+                      <td className="p-1.5 text-right text-xs text-slate-500">{pct}%</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-200 font-semibold">
+                  <td className="p-1.5" colSpan={2}>TOTAL</td>
+                  <td className="p-1.5 text-right font-mono text-xs">{fmtHl(totalHlMarca)}</td>
+                  <td className="p-1.5 text-right text-xs">100%</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
