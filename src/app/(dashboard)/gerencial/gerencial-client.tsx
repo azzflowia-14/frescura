@@ -782,6 +782,8 @@ function StockPorMarca({
     .sort((a, b) => b.hl - a.hl)
 
   const totalHlMarca = skus.reduce((sum, s) => sum + s.hl, 0)
+  const totalVpdMarca = skus.reduce((sum, s) => sum + s.vpd7Hl, 0)
+  const pisoMarca = totalVpdMarca > 0 ? Math.round((totalHlMarca / totalVpdMarca) * 10) / 10 : null
 
   return (
     <div className="bg-white rounded-xl border p-4">
@@ -824,9 +826,17 @@ function StockPorMarca({
         <div className="grid md:grid-cols-2 gap-4">
           {/* Pie chart */}
           <div>
-            <div className="text-center mb-2">
-              <span className="text-lg font-bold text-slate-800">{marca}</span>
-              <span className="text-sm text-slate-400 ml-2">{fmtHl(totalHlMarca)} HL total</span>
+            <div className="text-center mb-2 space-y-0.5">
+              <div>
+                <span className="text-lg font-bold text-slate-800">{marca}</span>
+                <span className="text-sm text-slate-400 ml-2">{fmtHl(totalHlMarca)} HL</span>
+              </div>
+              <div className="flex items-center justify-center gap-3 text-xs">
+                <span className="text-slate-500">VPD 7d: <span className="font-semibold text-slate-700">{fmtHl(totalVpdMarca)} HL/día</span></span>
+                <span className={`font-semibold ${pisoMarca !== null && pisoMarca < 10 ? "text-red-600" : "text-emerald-600"}`}>
+                  Piso: {pisoMarca !== null ? `${fmtDias(pisoMarca)} días` : "S/D"}
+                </span>
+              </div>
             </div>
             <ResponsiveContainer width="100%" height={280}>
               <PieChart>
@@ -860,6 +870,8 @@ function StockPorMarca({
                   <th className="p-1.5">Art.</th>
                   <th className="p-1.5">Descripción</th>
                   <th className="p-1.5 text-right">HL</th>
+                  <th className="p-1.5 text-right">VPD 7d</th>
+                  <th className="p-1.5 text-right">Piso</th>
                   <th className="p-1.5 text-right">%</th>
                 </tr>
               </thead>
@@ -877,6 +889,10 @@ function StockPorMarca({
                         {s.descripcion}
                       </td>
                       <td className="p-1.5 text-right font-mono text-xs font-semibold">{fmtHl(s.hl)}</td>
+                      <td className="p-1.5 text-right font-mono text-xs">{fmtHl(s.vpd7Hl)}</td>
+                      <td className={`p-1.5 text-right font-mono text-xs font-semibold ${s.diasPiso !== null && s.diasPiso < 10 ? "text-red-600" : "text-emerald-600"}`}>
+                        {s.diasPiso !== null ? `${fmtDias(s.diasPiso)}d` : "-"}
+                      </td>
                       <td className="p-1.5 text-right text-xs text-slate-500">{pct}%</td>
                     </tr>
                   )
@@ -886,6 +902,10 @@ function StockPorMarca({
                 <tr className="border-t-2 border-slate-200 font-semibold">
                   <td className="p-1.5" colSpan={2}>TOTAL</td>
                   <td className="p-1.5 text-right font-mono text-xs">{fmtHl(totalHlMarca)}</td>
+                  <td className="p-1.5 text-right font-mono text-xs">{fmtHl(totalVpdMarca)}</td>
+                  <td className={`p-1.5 text-right font-mono text-xs font-semibold ${pisoMarca !== null && pisoMarca < 10 ? "text-red-600" : "text-emerald-600"}`}>
+                    {pisoMarca !== null ? `${fmtDias(pisoMarca)}d` : "-"}
+                  </td>
                   <td className="p-1.5 text-right text-xs">100%</td>
                 </tr>
               </tfoot>

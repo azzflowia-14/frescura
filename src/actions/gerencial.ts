@@ -104,6 +104,8 @@ export interface StockHlItem {
   bultos: number
   hl: number
   clasificacion: "cervezas" | "nabs" | "otro"
+  vpd7Hl: number
+  diasPiso: number | null
 }
 
 export interface EspecialItem {
@@ -226,6 +228,12 @@ export async function getGerencialData(
     const hl = bultosToHl(art, bultos)
     const clasif = clasificacion(art)
 
+    // VPD 7 days for this SKU
+    const vpdItem = vpd7.vpd[art]
+    const vpdBultos = vpdItem?.vpdBultos ?? 0
+    const vpd7Hl = Math.round(bultosToHl(art, vpdBultos) * 1000) / 1000
+    const diasPisoSku = vpd7Hl > 0 ? Math.round((hl / vpd7Hl) * 10) / 10 : null
+
     stockItems.push({
       articulo: art,
       descripcion: data.descripcion,
@@ -234,6 +242,8 @@ export async function getGerencialData(
       bultos: Math.round(bultos * 100) / 100,
       hl: Math.round(hl * 100) / 100,
       clasificacion: clasif,
+      vpd7Hl,
+      diasPiso: diasPisoSku,
     })
 
     if (clasif === "cervezas") stockCervezasHl += hl
