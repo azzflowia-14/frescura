@@ -3,6 +3,7 @@
 import { query } from "@/lib/db"
 import { getVpdChess } from "@/actions/vpd-chess"
 import { getChessStock } from "@/lib/chess"
+import { loadKardexMes } from "@/lib/kardex"
 import {
   getSkuInfo,
   bultosToHl,
@@ -183,36 +184,69 @@ export async function getGerencialData(
   const fechaDesde = `${a}-${mesStr}-01`
   const siguienteMes = m === 12 ? `${a + 1}-01-01` : `${a}-${String(m + 1).padStart(2, "0")}-01`
 
-  // Parallel: stock from Chess + VPD 7 days + objectives + ingresos from WMS
-  const [chessStock, vpd7, objetivos, ingresosRaw] = await Promise.all([
-    getChessStock(),
+  // Try kardex first (Excel upload), fallback to Chess+WMS
+  const kardexData = loadKardexMes(m, a)
+
+  const [chessStock, vpd7, objetivos, ingresosRawWms] = await Promise.all([
+    kardexData ? Promise.resolve([]) : getChessStock(),
     getVpdChess(7),
     getObjetivos(m, a),
-    query<{ fecha: string; art: string; bultos: number }>(`
-      SELECT CONVERT(varchar, c.PltFchIngreso, 23) as fecha,
-        RTRIM(d.ArtCod) as art,
-        SUM(d.PltPUBQty) as bultos
-      FROM PLTCBC c
-      INNER JOIN PLTDTL d ON RTRIM(c.PltCod) = RTRIM(d.PltCod)
-      WHERE c.PltFchIngreso >= @fechaDesde AND c.PltFchIngreso < @siguienteMes
-      GROUP BY CONVERT(varchar, c.PltFchIngreso, 23), d.ArtCod
-      ORDER BY fecha
-    `, { fechaDesde, siguienteMes }),
+    kardexData
+      ? Promise.resolve([])
+      : query<{ fecha: string; art: string; bultos: number }>(`
+        SELECT CONVERT(varchar, c.PltFchIngreso, 23) as fecha,
+          RTRIM(d.ArtCod) as art,
+          SUM(d.PltPUBQty) as bultos
+        FROM PLTCBC c
+        INNER JOIN PLTDTL d ON RTRIM(c.PltCod) = RTRIM(d.PltCod)
+        WHERE c.PltFchIngreso >= @fechaDesde AND c.PltFchIngreso < @siguienteMes
+        GROUP BY CONVERT(varchar, c.PltFchIngreso, 23), d.ArtCod
+        ORDER BY fecha
+      `, { fechaDesde, siguienteMes }),
   ])
 
-  // Aggregate Chess stock by article (may have multiple lines per article/lote/deposito)
+  // Ingresos: from kardex REC.DEPOS or from WMS
+  let ingresosRaw: { fecha: string; art: string; bultos: number }[]
+  if (kardexData) {
+    // Aggregate REC.DEPOS movements by fecha+art
+    const ingMap = new Map<string, number>()
+    for (const mov of kardexData.movimientos) {
+      if (mov.concepto !== "REC.DEPOS.") continue
+      const key = `${mov.fecha}|${mov.codigo}`
+      ingMap.set(key, (ingMap.get(key) || 0) + mov.movBultos)
+    }
+    ingresosRaw = [...ingMap.entries()].map(([key, bultos]) => {
+      const [fecha, art] = key.split("|")
+      return { fecha, art, bultos }
+    })
+  } else {
+    ingresosRaw = ingresosRawWms
+  }
+
+  // Aggregate stock by article
   const artAgg = new Map<string, { descripcion: string; bultos: number }>()
-  for (const row of chessStock) {
-    const art = String(row.idArticulo).trim()
-    if (!art) continue
-    if (!esMercaderia(art)) continue
-    const existing = artAgg.get(art)
-    const bultos = Number(row.cantBultos) || 0
-    if (bultos <= 0) continue
-    if (existing) {
-      existing.bultos += bultos
-    } else {
-      artAgg.set(art, { descripcion: String(row.dsArticulo || "").trim(), bultos })
+
+  if (kardexData) {
+    // Stock from kardex saldoFinal
+    for (const r of kardexData.resumenArticulos) {
+      if (!esMercaderia(r.codigo)) continue
+      if (r.saldoFinal <= 0) continue
+      artAgg.set(r.codigo, { descripcion: r.descripcion, bultos: r.saldoFinal })
+    }
+  } else {
+    // Stock from Chess API
+    for (const row of chessStock) {
+      const art = String(row.idArticulo).trim()
+      if (!art) continue
+      if (!esMercaderia(art)) continue
+      const existing = artAgg.get(art)
+      const bultos = Number(row.cantBultos) || 0
+      if (bultos <= 0) continue
+      if (existing) {
+        existing.bultos += bultos
+      } else {
+        artAgg.set(art, { descripcion: String(row.dsArticulo || "").trim(), bultos })
+      }
     }
   }
 
