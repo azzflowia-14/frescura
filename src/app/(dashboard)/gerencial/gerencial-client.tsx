@@ -7,6 +7,7 @@ import {
   type GerencialData,
   type EspecialItem,
   type IngresoSkuItem,
+  type SnapshotDiario,
 } from "@/actions/gerencial"
 import { KpiCard } from "@/components/kpi-card"
 import { DivisionBadge } from "@/components/division-badge"
@@ -33,6 +34,7 @@ import {
   Line,
   CartesianGrid,
   ReferenceLine,
+  Legend,
 } from "recharts"
 import type { CategoriaEspecial } from "@/lib/sku"
 
@@ -219,6 +221,109 @@ export function GerencialClient() {
           color={data.diasPisoNabs !== null && data.diasPisoNabs < 10 ? "red" : "green"}
         />
       </div>
+
+      {/* Evolución diaria Stock + Piso */}
+      {data.snapshots.length >= 2 && (
+        <div className="bg-white rounded-xl border p-4">
+          <h3 className="text-sm font-medium text-slate-600 mb-3">
+            Evolución Diaria — Stock (HL) y Días de Piso
+          </h3>
+          <ResponsiveContainer width="100%" height={320}>
+            <LineChart
+              data={data.snapshots}
+              margin={{ left: 10, right: 10, bottom: 20 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                dataKey="fecha"
+                tickFormatter={(v) => {
+                  const d = v.split("-")
+                  return `${d[2]}/${d[1]}`
+                }}
+                tick={{ fontSize: 11 }}
+              />
+              <YAxis
+                yAxisId="hl"
+                tick={{ fontSize: 11 }}
+                tickFormatter={(v) => `${v.toLocaleString("es-AR")}`}
+                label={{ value: "HL", angle: -90, position: "insideLeft", style: { fontSize: 11, fill: "#94a3b8" } }}
+              />
+              <YAxis
+                yAxisId="piso"
+                orientation="right"
+                tick={{ fontSize: 11 }}
+                label={{ value: "Días piso", angle: 90, position: "insideRight", style: { fontSize: 11, fill: "#94a3b8" } }}
+              />
+              <Tooltip
+                labelFormatter={(v) => {
+                  const d = String(v).split("-")
+                  return `${d[2]}/${d[1]}/${d[0]}`
+                }}
+                formatter={(value, name) => {
+                  const v = Number(value)
+                  if (String(name).includes("Stock")) return [`${fmtHl(v)} HL`, String(name)]
+                  return [`${fmtDias(v)} días`, String(name)]
+                }}
+              />
+              <Legend />
+              <Line
+                yAxisId="hl"
+                type="monotone"
+                dataKey="stockCervezasHl"
+                name="Stock Cervezas"
+                stroke="#f59e0b"
+                strokeWidth={2}
+                dot={{ r: 3 }}
+              />
+              <Line
+                yAxisId="hl"
+                type="monotone"
+                dataKey="stockNabsHl"
+                name="Stock NABS"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                dot={{ r: 3 }}
+              />
+              <Line
+                yAxisId="piso"
+                type="monotone"
+                dataKey="diasPisoCervezas"
+                name="Piso Cervezas"
+                stroke="#f97316"
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                dot={{ r: 3 }}
+              />
+              <Line
+                yAxisId="piso"
+                type="monotone"
+                dataKey="diasPisoNabs"
+                name="Piso NABS"
+                stroke="#6366f1"
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                dot={{ r: 3 }}
+              />
+              <ReferenceLine
+                yAxisId="piso"
+                y={10}
+                stroke="#ef4444"
+                strokeDasharray="3 3"
+                label={{ value: "Mín 10 días", position: "right", fontSize: 10, fill: "#ef4444" }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+          <p className="text-[10px] text-slate-400 mt-1 text-center">
+            Línea continua = Stock HL (eje izq.) · Línea punteada = Días de piso (eje der.) · Línea roja = mínimo 10 días
+          </p>
+        </div>
+      )}
+
+      {data.snapshots.length < 2 && data.snapshots.length > 0 && (
+        <div className="bg-white rounded-xl border p-4 text-center text-sm text-slate-400">
+          Evolución diaria: {data.snapshots.length} dato registrado. El gráfico aparece a partir de 2 días de datos.
+        </div>
+      )}
 
       {/* Fila 2: Objetivos */}
       <div className="bg-white rounded-xl border p-4 space-y-4">

@@ -20,6 +20,43 @@ import {
 import * as fs from "fs"
 import * as path from "path"
 
+// ─── Snapshots diarios (stock + piso) ──────────────────────────────────
+
+export interface SnapshotDiario {
+  fecha: string // YYYY-MM-DD
+  stockCervezasHl: number
+  stockNabsHl: number
+  diasPisoCervezas: number | null
+  diasPisoNabs: number | null
+}
+
+const SNAPSHOT_PATH = path.join(process.cwd(), "src/data/stock-diario.json")
+
+function readSnapshots(): SnapshotDiario[] {
+  try {
+    const raw = fs.readFileSync(SNAPSHOT_PATH, "utf-8")
+    return JSON.parse(raw)
+  } catch {
+    return []
+  }
+}
+
+function saveSnapshot(snap: SnapshotDiario) {
+  const all = readSnapshots()
+  const idx = all.findIndex((s) => s.fecha === snap.fecha)
+  if (idx >= 0) {
+    all[idx] = snap // update today
+  } else {
+    all.push(snap)
+  }
+  all.sort((a, b) => a.fecha.localeCompare(b.fecha))
+  fs.writeFileSync(SNAPSHOT_PATH, JSON.stringify(all, null, 2))
+}
+
+export async function getSnapshots(): Promise<SnapshotDiario[]> {
+  return readSnapshots()
+}
+
 // ─── Objetivos (JSON local) ───────────────────────────────────────────
 
 interface Objetivos {
@@ -126,6 +163,8 @@ export interface GerencialData {
   ingresosPorSku: IngresoSkuItem[]
   // Especiales
   especiales: Record<CategoriaEspecial, { label: string; items: EspecialItem[]; totalHl: number }>
+  // Snapshots diarios (evolución stock + piso)
+  snapshots: SnapshotDiario[]
   timestamp: string
 }
 
@@ -332,6 +371,21 @@ export async function getGerencialData(
     }))
     .sort((a, b) => b.hl - a.hl)
 
+  // Auto-snapshot: guardar stock + piso del día actual (solo si es el mes actual)
+  const hoyStr = hoy.toISOString().slice(0, 10)
+  const esMesActual = m === hoy.getMonth() + 1 && a === hoy.getFullYear()
+  if (esMesActual) {
+    saveSnapshot({
+      fecha: hoyStr,
+      stockCervezasHl,
+      stockNabsHl,
+      diasPisoCervezas,
+      diasPisoNabs,
+    })
+  }
+
+  const snapshots = readSnapshots()
+
   return {
     mes: m,
     anio: a,
@@ -355,6 +409,7 @@ export async function getGerencialData(
     cumplimientoNabs,
     ingresosPorSku,
     especiales,
+    snapshots,
     timestamp: new Date().toISOString(),
   }
 }
