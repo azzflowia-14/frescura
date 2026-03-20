@@ -80,6 +80,9 @@ export function GerencialClient() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [stockModal, setStockModal] = useState<CatKey | null>(null)
+  const [showNabsStockModal, setShowNabsStockModal] = useState(false)
+  const [showNabsPisoModal, setShowNabsPisoModal] = useState(false)
+  const [showNabsChartModal, setShowNabsChartModal] = useState(false)
   const [showObjModal, setShowObjModal] = useState(false)
   const [objCervezas, setObjCervezas] = useState("")
   const [objAguas, setObjAguas] = useState("")
@@ -153,6 +156,18 @@ export function GerencialClient() {
     ? Math.min(100, Math.round((data.ingresoUngHl / data.objetivos.ung) * 100))
     : 0
 
+  // NABS combinado (aguas + ung)
+  const stockNabsHl = Math.round((data.stockAguasHl + data.stockUngHl) * 100) / 100
+  const vpmNabs = Math.round((data.vpmAguas + data.vpmUng) * 100) / 100
+  const diasPisoNabs = vpmNabs > 0 ? Math.round((stockNabsHl / vpmNabs) * 10) / 10 : null
+
+  // Snapshots con NABS combinado
+  const snapshotsConNabs = data.snapshots.map((s) => ({
+    ...s,
+    stockNabsHl: Math.round((s.stockAguasHl + s.stockUngHl) * 100) / 100,
+    diasPisoNabs: vpmNabs > 0 ? Math.round(((s.stockAguasHl + s.stockUngHl) / vpmNabs) * 10) / 10 : null,
+  }))
+
   // Pie data for stock by division (top 8)
   const pieData = data.stockPorDivision
     .filter((d) => d.division !== "NO APLICABLE" && d.hl > 0)
@@ -214,8 +229,8 @@ export function GerencialClient() {
         </div>
       </div>
 
-      {/* Fila 1: KPIs — 6 cards: stock + piso x 3 categorías */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* Fila 1: KPIs — 4 cards: stock + piso x 2 (cervezas + NABS) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <button onClick={() => setStockModal("cervezas")} className="text-left">
           <KpiCard
             title="Stock Cervezas"
@@ -225,22 +240,13 @@ export function GerencialClient() {
             color="yellow"
           />
         </button>
-        <button onClick={() => setStockModal("aguas")} className="text-left">
+        <button onClick={() => setShowNabsStockModal(true)} className="text-left">
           <KpiCard
-            title="Stock Aguas"
-            value={`${fmtHl(data.stockAguasHl)} HL`}
-            subtitle="Click para detalle"
-            icon={Droplets}
-            color="cyan"
-          />
-        </button>
-        <button onClick={() => setStockModal("ung")} className="text-left">
-          <KpiCard
-            title="Stock UNG"
-            value={`${fmtHl(data.stockUngHl)} HL`}
+            title="Stock NABS"
+            value={`${fmtHl(stockNabsHl)} HL`}
             subtitle="Click para detalle"
             icon={GlassWater}
-            color="purple"
+            color="cyan"
           />
         </button>
         <KpiCard
@@ -250,25 +256,20 @@ export function GerencialClient() {
           icon={CalendarDays}
           color={data.diasPisoCervezas !== null && data.diasPisoCervezas < 10 ? "red" : "green"}
         />
-        <KpiCard
-          title="Piso Aguas"
-          value={`${fmtDias(data.diasPisoAguas)} días`}
-          subtitle={`VPM: ${fmtHl(data.vpmAguas)} HL/día`}
-          icon={CalendarDays}
-          color={data.diasPisoAguas !== null && data.diasPisoAguas < 10 ? "red" : "green"}
-        />
-        <KpiCard
-          title="Piso UNG"
-          value={`${fmtDias(data.diasPisoUng)} días`}
-          subtitle={`VPM: ${fmtHl(data.vpmUng)} HL/día`}
-          icon={CalendarDays}
-          color={data.diasPisoUng !== null && data.diasPisoUng < 10 ? "red" : "green"}
-        />
+        <button onClick={() => setShowNabsPisoModal(true)} className="text-left">
+          <KpiCard
+            title="Piso NABS"
+            value={`${fmtDias(diasPisoNabs)} días`}
+            subtitle={`VPM: ${fmtHl(vpmNabs)} HL/día`}
+            icon={CalendarDays}
+            color={diasPisoNabs !== null && diasPisoNabs < 10 ? "red" : "green"}
+          />
+        </button>
       </div>
 
-      {/* Evolución diaria Días de Piso — 3 gráficos */}
+      {/* Evolución diaria Días de Piso — 2 gráficos: Cervezas + NABS */}
       {data.snapshots.length >= 2 && (
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="grid md:grid-cols-2 gap-4">
           <div className="bg-white rounded-xl border p-4">
             <h3 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-2">
               <Beer className="w-4 h-4 text-amber-500" /> Días de Piso — Cervezas
@@ -324,115 +325,63 @@ export function GerencialClient() {
             </ResponsiveContainer>
           </div>
 
-          <div className="bg-white rounded-xl border p-4">
-            <h3 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-2">
-              <Droplets className="w-4 h-4 text-cyan-500" /> Días de Piso — Aguas
-            </h3>
-            <ResponsiveContainer width="100%" height={260}>
-              <LineChart
-                data={data.snapshots}
-                margin={{ left: 5, right: 10, bottom: 20 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="fecha"
-                  tickFormatter={(v) => {
-                    const d = v.split("-")
-                    return `${d[2]}/${d[1]}`
-                  }}
-                  tick={{ fontSize: 10 }}
-                />
-                <YAxis
-                  tick={{ fontSize: 10 }}
-                  label={{ value: "Días", angle: -90, position: "insideLeft", style: { fontSize: 10, fill: "#94a3b8" } }}
-                />
-                <Tooltip
-                  content={({ active, payload, label }) => {
-                    if (!active || !payload?.length) return null
-                    const snap = payload[0].payload as SnapshotDiario
-                    const d = String(label).split("-")
-                    return (
-                      <div className="bg-white border rounded-lg shadow-lg p-2.5 text-xs space-y-1">
-                        <p className="font-medium text-slate-700">{d[2]}/{d[1]}/{d[0]}</p>
-                        <p className="text-cyan-600">Piso: <span className="font-semibold">{fmtDias(snap.diasPisoAguas)} días</span></p>
-                        <p className="text-slate-500">Stock: <span className="font-semibold">{fmtHl(snap.stockAguasHl)} HL</span></p>
-                      </div>
-                    )
-                  }}
-                />
-                <ReferenceLine
-                  y={10}
-                  stroke="#ef4444"
-                  strokeDasharray="3 3"
-                  label={{ value: "Mín 10d", position: "right", fontSize: 9, fill: "#ef4444" }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="diasPisoAguas"
-                  name="Días de Piso"
-                  stroke="#06b6d4"
-                  strokeWidth={2.5}
-                  dot={{ r: 3, fill: "#06b6d4", strokeWidth: 2, stroke: "#fff" }}
-                  activeDot={{ r: 5, fill: "#06b6d4", strokeWidth: 2, stroke: "#fff" }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="bg-white rounded-xl border p-4">
-            <h3 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-2">
-              <GlassWater className="w-4 h-4 text-violet-500" /> Días de Piso — UNG
-            </h3>
-            <ResponsiveContainer width="100%" height={260}>
-              <LineChart
-                data={data.snapshots}
-                margin={{ left: 5, right: 10, bottom: 20 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="fecha"
-                  tickFormatter={(v) => {
-                    const d = v.split("-")
-                    return `${d[2]}/${d[1]}`
-                  }}
-                  tick={{ fontSize: 10 }}
-                />
-                <YAxis
-                  tick={{ fontSize: 10 }}
-                  label={{ value: "Días", angle: -90, position: "insideLeft", style: { fontSize: 10, fill: "#94a3b8" } }}
-                />
-                <Tooltip
-                  content={({ active, payload, label }) => {
-                    if (!active || !payload?.length) return null
-                    const snap = payload[0].payload as SnapshotDiario
-                    const d = String(label).split("-")
-                    return (
-                      <div className="bg-white border rounded-lg shadow-lg p-2.5 text-xs space-y-1">
-                        <p className="font-medium text-slate-700">{d[2]}/{d[1]}/{d[0]}</p>
-                        <p className="text-violet-600">Piso: <span className="font-semibold">{fmtDias(snap.diasPisoUng)} días</span></p>
-                        <p className="text-slate-500">Stock: <span className="font-semibold">{fmtHl(snap.stockUngHl)} HL</span></p>
-                      </div>
-                    )
-                  }}
-                />
-                <ReferenceLine
-                  y={10}
-                  stroke="#ef4444"
-                  strokeDasharray="3 3"
-                  label={{ value: "Mín 10d", position: "right", fontSize: 9, fill: "#ef4444" }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="diasPisoUng"
-                  name="Días de Piso"
-                  stroke="#8b5cf6"
-                  strokeWidth={2.5}
-                  dot={{ r: 3, fill: "#8b5cf6", strokeWidth: 2, stroke: "#fff" }}
-                  activeDot={{ r: 5, fill: "#8b5cf6", strokeWidth: 2, stroke: "#fff" }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <button className="text-left" onClick={() => setShowNabsChartModal(true)}>
+            <div className="bg-white rounded-xl border p-4 hover:border-cyan-300 transition-colors h-full">
+              <h3 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-2">
+                <GlassWater className="w-4 h-4 text-cyan-500" /> Días de Piso — NABS
+                <span className="text-[10px] text-slate-400 ml-auto">click para detalle Aguas / UNG</span>
+              </h3>
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart
+                  data={snapshotsConNabs}
+                  margin={{ left: 5, right: 10, bottom: 20 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="fecha"
+                    tickFormatter={(v) => {
+                      const d = v.split("-")
+                      return `${d[2]}/${d[1]}`
+                    }}
+                    tick={{ fontSize: 10 }}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10 }}
+                    label={{ value: "Días", angle: -90, position: "insideLeft", style: { fontSize: 10, fill: "#94a3b8" } }}
+                  />
+                  <Tooltip
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null
+                      const snap = payload[0].payload as (typeof snapshotsConNabs)[0]
+                      const d = String(label).split("-")
+                      return (
+                        <div className="bg-white border rounded-lg shadow-lg p-2.5 text-xs space-y-1">
+                          <p className="font-medium text-slate-700">{d[2]}/{d[1]}/{d[0]}</p>
+                          <p className="text-cyan-600">Piso NABS: <span className="font-semibold">{fmtDias(snap.diasPisoNabs)} días</span></p>
+                          <p className="text-slate-500">Stock: <span className="font-semibold">{fmtHl(snap.stockNabsHl)} HL</span></p>
+                        </div>
+                      )
+                    }}
+                  />
+                  <ReferenceLine
+                    y={10}
+                    stroke="#ef4444"
+                    strokeDasharray="3 3"
+                    label={{ value: "Mín 10d", position: "right", fontSize: 9, fill: "#ef4444" }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="diasPisoNabs"
+                    name="Días de Piso"
+                    stroke="#06b6d4"
+                    strokeWidth={2.5}
+                    dot={{ r: 3, fill: "#06b6d4", strokeWidth: 2, stroke: "#fff" }}
+                    activeDot={{ r: 5, fill: "#06b6d4", strokeWidth: 2, stroke: "#fff" }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </button>
         </div>
       )}
 
@@ -845,6 +794,142 @@ export function GerencialClient() {
                   </tr>
                 </tfoot>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal NABS Stock — tarjetas individuales Aguas + UNG */}
+      {showNabsStockModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowNabsStockModal(false)}>
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-xl space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Stock NABS — Detalle</h3>
+              <button onClick={() => setShowNabsStockModal(false)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => { setShowNabsStockModal(false); setStockModal("aguas") }} className="text-left">
+                <KpiCard
+                  title="Stock Aguas"
+                  value={`${fmtHl(data.stockAguasHl)} HL`}
+                  subtitle="Click para detalle SKU"
+                  icon={Droplets}
+                  color="cyan"
+                />
+              </button>
+              <button onClick={() => { setShowNabsStockModal(false); setStockModal("ung") }} className="text-left">
+                <KpiCard
+                  title="Stock UNG"
+                  value={`${fmtHl(data.stockUngHl)} HL`}
+                  subtitle="Click para detalle SKU"
+                  icon={GlassWater}
+                  color="purple"
+                />
+              </button>
+            </div>
+            <div className="text-center text-xs text-slate-400">
+              Total NABS: {fmtHl(stockNabsHl)} HL
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal NABS Piso — tarjetas individuales Aguas + UNG */}
+      {showNabsPisoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowNabsPisoModal(false)}>
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-xl space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Piso NABS — Detalle</h3>
+              <button onClick={() => setShowNabsPisoModal(false)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <KpiCard
+                title="Piso Aguas"
+                value={`${fmtDias(data.diasPisoAguas)} días`}
+                subtitle={`VPM: ${fmtHl(data.vpmAguas)} HL/día`}
+                icon={CalendarDays}
+                color={data.diasPisoAguas !== null && data.diasPisoAguas < 10 ? "red" : "green"}
+              />
+              <KpiCard
+                title="Piso UNG"
+                value={`${fmtDias(data.diasPisoUng)} días`}
+                subtitle={`VPM: ${fmtHl(data.vpmUng)} HL/día`}
+                icon={CalendarDays}
+                color={data.diasPisoUng !== null && data.diasPisoUng < 10 ? "red" : "green"}
+              />
+            </div>
+            <div className="text-center text-xs text-slate-400">
+              Piso combinado NABS: {fmtDias(diasPisoNabs)} días
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal NABS Charts — gráficos separados Aguas + UNG */}
+      {showNabsChartModal && data.snapshots.length >= 2 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowNabsChartModal(false)}>
+          <div className="bg-white rounded-xl p-6 w-full max-w-4xl shadow-xl max-h-[85vh] overflow-auto space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Días de Piso NABS — Aguas y UNG</h3>
+              <button onClick={() => setShowNabsChartModal(false)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="border rounded-lg p-4">
+                <h4 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-2">
+                  <Droplets className="w-4 h-4 text-cyan-500" /> Aguas
+                </h4>
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={data.snapshots} margin={{ left: 5, right: 10, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="fecha" tickFormatter={(v) => { const d = v.split("-"); return `${d[2]}/${d[1]}` }} tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} label={{ value: "Días", angle: -90, position: "insideLeft", style: { fontSize: 10, fill: "#94a3b8" } }} />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null
+                        const snap = payload[0].payload as SnapshotDiario
+                        const d = String(label).split("-")
+                        return (
+                          <div className="bg-white border rounded-lg shadow-lg p-2.5 text-xs space-y-1">
+                            <p className="font-medium text-slate-700">{d[2]}/{d[1]}/{d[0]}</p>
+                            <p className="text-cyan-600">Piso: <span className="font-semibold">{fmtDias(snap.diasPisoAguas)} días</span></p>
+                            <p className="text-slate-500">Stock: <span className="font-semibold">{fmtHl(snap.stockAguasHl)} HL</span></p>
+                          </div>
+                        )
+                      }}
+                    />
+                    <ReferenceLine y={10} stroke="#ef4444" strokeDasharray="3 3" label={{ value: "Mín 10d", position: "right", fontSize: 9, fill: "#ef4444" }} />
+                    <Line type="monotone" dataKey="diasPisoAguas" name="Días de Piso" stroke="#06b6d4" strokeWidth={2.5} dot={{ r: 3, fill: "#06b6d4", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 5, fill: "#06b6d4", strokeWidth: 2, stroke: "#fff" }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="border rounded-lg p-4">
+                <h4 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-2">
+                  <GlassWater className="w-4 h-4 text-violet-500" /> UNG
+                </h4>
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={data.snapshots} margin={{ left: 5, right: 10, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="fecha" tickFormatter={(v) => { const d = v.split("-"); return `${d[2]}/${d[1]}` }} tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} label={{ value: "Días", angle: -90, position: "insideLeft", style: { fontSize: 10, fill: "#94a3b8" } }} />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null
+                        const snap = payload[0].payload as SnapshotDiario
+                        const d = String(label).split("-")
+                        return (
+                          <div className="bg-white border rounded-lg shadow-lg p-2.5 text-xs space-y-1">
+                            <p className="font-medium text-slate-700">{d[2]}/{d[1]}/{d[0]}</p>
+                            <p className="text-violet-600">Piso: <span className="font-semibold">{fmtDias(snap.diasPisoUng)} días</span></p>
+                            <p className="text-slate-500">Stock: <span className="font-semibold">{fmtHl(snap.stockUngHl)} HL</span></p>
+                          </div>
+                        )
+                      }}
+                    />
+                    <ReferenceLine y={10} stroke="#ef4444" strokeDasharray="3 3" label={{ value: "Mín 10d", position: "right", fontSize: 9, fill: "#ef4444" }} />
+                    <Line type="monotone" dataKey="diasPisoUng" name="Días de Piso" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 3, fill: "#8b5cf6", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 5, fill: "#8b5cf6", strokeWidth: 2, stroke: "#fff" }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         </div>
