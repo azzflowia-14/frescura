@@ -411,20 +411,81 @@ export async function getGerencialData(
     }))
     .sort((a, b) => b.hl - a.hl)
 
-  // Auto-snapshot: guardar stock + piso del día actual (solo si es el mes actual)
-  const hoyStr = hoy.toISOString().slice(0, 10)
-  const esMesActual = m === hoy.getMonth() + 1 && a === hoy.getFullYear()
-  if (esMesActual) {
-    saveSnapshot({
-      fecha: hoyStr,
-      stockCervezasHl,
-      stockNabsHl,
-      diasPisoCervezas,
-      diasPisoNabs,
-    })
-  }
+  // ── Snapshots: calcular desde Kardex si disponible, sino JSON legacy ──
+  let snapshots: SnapshotDiario[]
 
-  const snapshots = readSnapshots()
+  if (kardexData) {
+    // Reconstruir evolución diaria de stock separado por cervezas/NABS desde Kardex
+    const fechasKardex = [...new Set(kardexData.movimientos.map(mv => mv.fecha))].sort()
+    const artCodes = [...new Set(kardexData.movimientos.map(mv => mv.codigo))]
+
+    // Inicializar saldo por artículo con saldo inicial
+    const lastSaldoArt = new Map<string, number>()
+    for (const mv of kardexData.movimientos) {
+      if (mv.concepto === "SALDO INICIAL") {
+        lastSaldoArt.set(mv.codigo, mv.saldoBultos)
+      }
+    }
+    // Asegurar todos los artículos tienen saldo inicial (0 si no hubo SALDO INICIAL)
+    for (const code of artCodes) {
+      if (!lastSaldoArt.has(code)) lastSaldoArt.set(code, 0)
+    }
+
+    snapshots = []
+    for (const fecha of fechasKardex) {
+      // Actualizar saldos con movimientos del día
+      const dayMovs = kardexData.movimientos.filter(mv => mv.fecha === fecha && mv.concepto !== "RECUENTO")
+      // Agrupar por artículo, tomar el último saldoBultos del día
+      const artDaySaldo = new Map<string, number>()
+      for (const mv of dayMovs) {
+        artDaySaldo.set(mv.codigo, mv.saldoBultos)
+      }
+      // Actualizar lastSaldoArt con los saldos finales del día
+      for (const [code, saldo] of artDaySaldo) {
+        lastSaldoArt.set(code, saldo)
+      }
+
+      // Calcular stock HL separado por clasificación
+      let stockCervHl = 0
+      let stockNabsHl2 = 0
+      for (const [code, saldo] of lastSaldoArt) {
+        if (saldo <= 0) continue
+        if (!esMercaderia(code)) continue
+        const hl = bultosToHl(code, saldo)
+        const clasif = clasificacion(code)
+        if (clasif === "cervezas") stockCervHl += hl
+        if (clasif === "nabs") stockNabsHl2 += hl
+      }
+
+      stockCervHl = Math.round(stockCervHl * 100) / 100
+      stockNabsHl2 = Math.round(stockNabsHl2 * 100) / 100
+
+      const dpCerv = vpmCervezas > 0 ? Math.round((stockCervHl / vpmCervezas) * 10) / 10 : null
+      const dpNabs = vpmNabs > 0 ? Math.round((stockNabsHl2 / vpmNabs) * 10) / 10 : null
+
+      snapshots.push({
+        fecha,
+        stockCervezasHl: stockCervHl,
+        stockNabsHl: stockNabsHl2,
+        diasPisoCervezas: dpCerv,
+        diasPisoNabs: dpNabs,
+      })
+    }
+  } else {
+    // Fallback: snapshots del JSON legacy + auto-save hoy
+    const hoyStr = hoy.toISOString().slice(0, 10)
+    const esMesActual = m === hoy.getMonth() + 1 && a === hoy.getFullYear()
+    if (esMesActual) {
+      saveSnapshot({
+        fecha: hoyStr,
+        stockCervezasHl,
+        stockNabsHl,
+        diasPisoCervezas,
+        diasPisoNabs,
+      })
+    }
+    snapshots = readSnapshots()
+  }
 
   return {
     mes: m,
