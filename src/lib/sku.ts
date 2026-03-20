@@ -81,13 +81,16 @@ export function getAllSkus(): SkuInfo[] {
   return Object.values(articles)
 }
 
-export type Clasificacion = "cervezas" | "nabs" | "otro"
+export type Clasificacion = "cervezas" | "aguas" | "ung" | "otro"
 
 export function clasificacion(articulo: string | number): Clasificacion {
   const info = articles[String(articulo)]
   if (!info) return "otro"
   if (info.esCerveza) return "cervezas"
-  if (info.esNabs) return "nabs"
+  if (info.esNabs) {
+    if (info.unidadNegocio === "AGUAS ECO") return "aguas"
+    return "ung"
+  }
   return "otro"
 }
 

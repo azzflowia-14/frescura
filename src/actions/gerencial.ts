@@ -12,6 +12,7 @@ import {
   getEspeciales,
   ESPECIAL_LABELS,
   type CategoriaEspecial,
+  type Clasificacion,
 } from "@/lib/sku"
 import {
   getDiasHabiles,
@@ -26,9 +27,11 @@ import * as path from "path"
 export interface SnapshotDiario {
   fecha: string // YYYY-MM-DD
   stockCervezasHl: number
-  stockNabsHl: number
+  stockAguasHl: number
+  stockUngHl: number
   diasPisoCervezas: number | null
-  diasPisoNabs: number | null
+  diasPisoAguas: number | null
+  diasPisoUng: number | null
 }
 
 const SNAPSHOT_PATH = path.join(process.cwd(), "src/data/stock-diario.json")
@@ -62,7 +65,8 @@ export async function getSnapshots(): Promise<SnapshotDiario[]> {
 
 interface Objetivos {
   cervezas: number
-  nabs: number
+  aguas: number
+  ung: number
 }
 
 const OBJ_PATH = path.join(process.cwd(), "src/data/objetivos.json")
@@ -79,18 +83,27 @@ function readObjetivosFile(): Record<string, Objetivos> {
 export async function getObjetivos(mes: number, anio: number): Promise<Objetivos> {
   const key = `${anio}-${String(mes).padStart(2, "0")}`
   const data = readObjetivosFile()
-  return data[key] || { cervezas: 0, nabs: 0 }
+  const obj = data[key]
+  if (!obj) return { cervezas: 0, aguas: 0, ung: 0 }
+  // Migración: si tiene "nabs" legacy, repartir en aguas=0 y ung=nabs
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw = obj as any
+  if ("nabs" in raw && !("aguas" in raw)) {
+    return { cervezas: Number(raw.cervezas) || 0, aguas: 0, ung: Number(raw.nabs) || 0 }
+  }
+  return { cervezas: Number(raw.cervezas) || 0, aguas: Number(raw.aguas) || 0, ung: Number(raw.ung) || 0 }
 }
 
 export async function saveObjetivos(
   mes: number,
   anio: number,
   cervezas: number,
-  nabs: number
+  aguas: number,
+  ung: number
 ): Promise<{ ok: boolean }> {
   const key = `${anio}-${String(mes).padStart(2, "0")}`
   const data = readObjetivosFile()
-  data[key] = { cervezas, nabs }
+  data[key] = { cervezas, aguas, ung }
   fs.writeFileSync(OBJ_PATH, JSON.stringify(data, null, 2))
   return { ok: true }
 }
@@ -104,7 +117,7 @@ export interface StockHlItem {
   marca: string
   bultos: number
   hl: number
-  clasificacion: "cervezas" | "nabs" | "otro"
+  clasificacion: Clasificacion
   vpd7Hl: number
   diasPiso: number | null
 }
@@ -123,9 +136,11 @@ export interface IngresoDia {
   fecha: string
   bultos: number
   hlCervezas: number
-  hlNabs: number
+  hlAguas: number
+  hlUng: number
   acumCervezas: number
-  acumNabs: number
+  acumAguas: number
+  acumUng: number
 }
 
 export interface IngresoSkuItem {
@@ -133,7 +148,7 @@ export interface IngresoSkuItem {
   descripcion: string
   bultos: number
   hl: number
-  clasificacion: "cervezas" | "nabs" | "otro"
+  clasificacion: Clasificacion
 }
 
 export interface GerencialData {
@@ -141,7 +156,8 @@ export interface GerencialData {
   anio: number
   // Stock
   stockCervezasHl: number
-  stockNabsHl: number
+  stockAguasHl: number
+  stockUngHl: number
   stockTotalHl: number
   stockItems: StockHlItem[]
   stockPorDivision: { division: string; hl: number }[]
@@ -152,16 +168,20 @@ export interface GerencialData {
   diasHabilesRestantes: number
   // VPM
   vpmCervezas: number
-  vpmNabs: number
+  vpmAguas: number
+  vpmUng: number
   // Días de piso
   diasPisoCervezas: number | null
-  diasPisoNabs: number | null
+  diasPisoAguas: number | null
+  diasPisoUng: number | null
   // Ingresos del mes (cumplimiento objetivos)
   ingresos: IngresoDia[]
   ingresoCervezasHl: number
-  ingresoNabsHl: number
+  ingresoAguasHl: number
+  ingresoUngHl: number
   cumplimientoCervezas: number // porcentaje 0-100
-  cumplimientoNabs: number
+  cumplimientoAguas: number
+  cumplimientoUng: number
   // Ingresos por SKU (para modal detalle)
   ingresosPorSku: IngresoSkuItem[]
   // Especiales
@@ -249,7 +269,8 @@ export async function getGerencialData(
   // Convert stock to HL
   const stockItems: StockHlItem[] = []
   let stockCervezasHl = 0
-  let stockNabsHl = 0
+  let stockAguasHl = 0
+  let stockUngHl = 0
   const divHlMap = new Map<string, number>()
 
   for (const [art, data] of artAgg) {
@@ -277,14 +298,16 @@ export async function getGerencialData(
     })
 
     if (clasif === "cervezas") stockCervezasHl += hl
-    if (clasif === "nabs") stockNabsHl += hl
+    if (clasif === "aguas") stockAguasHl += hl
+    if (clasif === "ung") stockUngHl += hl
 
     const div = info?.division ?? "Sin clasificar"
     divHlMap.set(div, (divHlMap.get(div) || 0) + hl)
   }
 
   stockCervezasHl = Math.round(stockCervezasHl * 100) / 100
-  stockNabsHl = Math.round(stockNabsHl * 100) / 100
+  stockAguasHl = Math.round(stockAguasHl * 100) / 100
+  stockUngHl = Math.round(stockUngHl * 100) / 100
 
   const stockPorDivision = Array.from(divHlMap.entries())
     .map(([division, hl]) => ({ division, hl: Math.round(hl * 100) / 100 }))
@@ -297,11 +320,13 @@ export async function getGerencialData(
 
   // VPM (Venta Promedio por día hábil del Mes)
   const vpmCervezas = diasHabilesTotales > 0 ? Math.round((objetivos.cervezas / diasHabilesTotales) * 100) / 100 : 0
-  const vpmNabs = diasHabilesTotales > 0 ? Math.round((objetivos.nabs / diasHabilesTotales) * 100) / 100 : 0
+  const vpmAguas = diasHabilesTotales > 0 ? Math.round((objetivos.aguas / diasHabilesTotales) * 100) / 100 : 0
+  const vpmUng = diasHabilesTotales > 0 ? Math.round((objetivos.ung / diasHabilesTotales) * 100) / 100 : 0
 
   // Días de piso
   const diasPisoCervezas = vpmCervezas > 0 ? Math.round((stockCervezasHl / vpmCervezas) * 10) / 10 : null
-  const diasPisoNabs = vpmNabs > 0 ? Math.round((stockNabsHl / vpmNabs) * 10) / 10 : null
+  const diasPisoAguas = vpmAguas > 0 ? Math.round((stockAguasHl / vpmAguas) * 10) / 10 : null
+  const diasPisoUng = vpmUng > 0 ? Math.round((stockUngHl / vpmUng) * 10) / 10 : null
 
   // Productos especiales with VPD 7 days in HL
   const especialesSku = getEspeciales()
@@ -353,21 +378,23 @@ export async function getGerencialData(
     }
   }
 
-  // Ingresos del mes (PLTCBC + PLTDTL from WMS)
-  const ingDiaMap = new Map<string, { bultos: number; hlCerv: number; hlNabs: number }>()
-  const ingSkuMap = new Map<string, { descripcion: string; bultos: number; hl: number; clasificacion: "cervezas" | "nabs" | "otro" }>()
+  // Ingresos del mes
+  const ingDiaMap = new Map<string, { bultos: number; hlCerv: number; hlAguas: number; hlUng: number }>()
+  const ingSkuMap = new Map<string, { descripcion: string; bultos: number; hl: number; clasificacion: Clasificacion }>()
   let ingresoCervezasHl = 0
-  let ingresoNabsHl = 0
+  let ingresoAguasHl = 0
+  let ingresoUngHl = 0
 
   for (const r of ingresosRaw) {
     const art = r.art?.trim()
     if (!art || !esMercaderia(art)) continue
     const hl = bultosToHl(art, r.bultos)
     const clasif = clasificacion(art)
-    const existing = ingDiaMap.get(r.fecha) || { bultos: 0, hlCerv: 0, hlNabs: 0 }
+    const existing = ingDiaMap.get(r.fecha) || { bultos: 0, hlCerv: 0, hlAguas: 0, hlUng: 0 }
     existing.bultos += r.bultos
     if (clasif === "cervezas") { existing.hlCerv += hl; ingresoCervezasHl += hl }
-    if (clasif === "nabs") { existing.hlNabs += hl; ingresoNabsHl += hl }
+    if (clasif === "aguas") { existing.hlAguas += hl; ingresoAguasHl += hl }
+    if (clasif === "ung") { existing.hlUng += hl; ingresoUngHl += hl }
     ingDiaMap.set(r.fecha, existing)
 
     // Acumular por SKU
@@ -382,24 +409,29 @@ export async function getGerencialData(
   }
 
   ingresoCervezasHl = Math.round(ingresoCervezasHl * 10) / 10
-  ingresoNabsHl = Math.round(ingresoNabsHl * 10) / 10
+  ingresoAguasHl = Math.round(ingresoAguasHl * 10) / 10
+  ingresoUngHl = Math.round(ingresoUngHl * 10) / 10
 
-  let acumC = 0, acumN = 0
+  let acumC = 0, acumA = 0, acumU = 0
   const ingresos: IngresoDia[] = [...ingDiaMap.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([fecha, d]) => {
     acumC += d.hlCerv
-    acumN += d.hlNabs
+    acumA += d.hlAguas
+    acumU += d.hlUng
     return {
       fecha,
       bultos: d.bultos,
       hlCervezas: Math.round(d.hlCerv * 10) / 10,
-      hlNabs: Math.round(d.hlNabs * 10) / 10,
+      hlAguas: Math.round(d.hlAguas * 10) / 10,
+      hlUng: Math.round(d.hlUng * 10) / 10,
       acumCervezas: Math.round(acumC * 10) / 10,
-      acumNabs: Math.round(acumN * 10) / 10,
+      acumAguas: Math.round(acumA * 10) / 10,
+      acumUng: Math.round(acumU * 10) / 10,
     }
   })
 
   const cumplimientoCervezas = objetivos.cervezas > 0 ? Math.round((ingresoCervezasHl / objetivos.cervezas) * 1000) / 10 : 0
-  const cumplimientoNabs = objetivos.nabs > 0 ? Math.round((ingresoNabsHl / objetivos.nabs) * 1000) / 10 : 0
+  const cumplimientoAguas = objetivos.aguas > 0 ? Math.round((ingresoAguasHl / objetivos.aguas) * 1000) / 10 : 0
+  const cumplimientoUng = objetivos.ung > 0 ? Math.round((ingresoUngHl / objetivos.ung) * 1000) / 10 : 0
 
   const ingresosPorSku: IngresoSkuItem[] = Array.from(ingSkuMap.entries())
     .map(([articulo, d]) => ({
@@ -415,7 +447,7 @@ export async function getGerencialData(
   let snapshots: SnapshotDiario[]
 
   if (kardexData) {
-    // Reconstruir evolución diaria de stock separado por cervezas/NABS desde Kardex
+    // Reconstruir evolución diaria de stock separado por cervezas/aguas/ung desde Kardex
     const fechasKardex = [...new Set(kardexData.movimientos.map(mv => mv.fecha))].sort()
     const artCodes = [...new Set(kardexData.movimientos.map(mv => mv.codigo))]
 
@@ -426,49 +458,50 @@ export async function getGerencialData(
         lastSaldoArt.set(mv.codigo, mv.saldoBultos)
       }
     }
-    // Asegurar todos los artículos tienen saldo inicial (0 si no hubo SALDO INICIAL)
     for (const code of artCodes) {
       if (!lastSaldoArt.has(code)) lastSaldoArt.set(code, 0)
     }
 
     snapshots = []
     for (const fecha of fechasKardex) {
-      // Actualizar saldos con movimientos del día
       const dayMovs = kardexData.movimientos.filter(mv => mv.fecha === fecha && mv.concepto !== "RECUENTO")
-      // Agrupar por artículo, tomar el último saldoBultos del día
       const artDaySaldo = new Map<string, number>()
       for (const mv of dayMovs) {
         artDaySaldo.set(mv.codigo, mv.saldoBultos)
       }
-      // Actualizar lastSaldoArt con los saldos finales del día
       for (const [code, saldo] of artDaySaldo) {
         lastSaldoArt.set(code, saldo)
       }
 
-      // Calcular stock HL separado por clasificación
-      let stockCervHl = 0
-      let stockNabsHl2 = 0
+      let snapCervHl = 0
+      let snapAguasHl = 0
+      let snapUngHl = 0
       for (const [code, saldo] of lastSaldoArt) {
         if (saldo <= 0) continue
         if (!esMercaderia(code)) continue
         const hl = bultosToHl(code, saldo)
         const clasif = clasificacion(code)
-        if (clasif === "cervezas") stockCervHl += hl
-        if (clasif === "nabs") stockNabsHl2 += hl
+        if (clasif === "cervezas") snapCervHl += hl
+        if (clasif === "aguas") snapAguasHl += hl
+        if (clasif === "ung") snapUngHl += hl
       }
 
-      stockCervHl = Math.round(stockCervHl * 100) / 100
-      stockNabsHl2 = Math.round(stockNabsHl2 * 100) / 100
+      snapCervHl = Math.round(snapCervHl * 100) / 100
+      snapAguasHl = Math.round(snapAguasHl * 100) / 100
+      snapUngHl = Math.round(snapUngHl * 100) / 100
 
-      const dpCerv = vpmCervezas > 0 ? Math.round((stockCervHl / vpmCervezas) * 10) / 10 : null
-      const dpNabs = vpmNabs > 0 ? Math.round((stockNabsHl2 / vpmNabs) * 10) / 10 : null
+      const dpCerv = vpmCervezas > 0 ? Math.round((snapCervHl / vpmCervezas) * 10) / 10 : null
+      const dpAguas = vpmAguas > 0 ? Math.round((snapAguasHl / vpmAguas) * 10) / 10 : null
+      const dpUng = vpmUng > 0 ? Math.round((snapUngHl / vpmUng) * 10) / 10 : null
 
       snapshots.push({
         fecha,
-        stockCervezasHl: stockCervHl,
-        stockNabsHl: stockNabsHl2,
+        stockCervezasHl: snapCervHl,
+        stockAguasHl: snapAguasHl,
+        stockUngHl: snapUngHl,
         diasPisoCervezas: dpCerv,
-        diasPisoNabs: dpNabs,
+        diasPisoAguas: dpAguas,
+        diasPisoUng: dpUng,
       })
     }
   } else {
@@ -479,9 +512,11 @@ export async function getGerencialData(
       saveSnapshot({
         fecha: hoyStr,
         stockCervezasHl,
-        stockNabsHl,
+        stockAguasHl,
+        stockUngHl,
         diasPisoCervezas,
-        diasPisoNabs,
+        diasPisoAguas,
+        diasPisoUng,
       })
     }
     snapshots = readSnapshots()
@@ -491,8 +526,9 @@ export async function getGerencialData(
     mes: m,
     anio: a,
     stockCervezasHl,
-    stockNabsHl,
-    stockTotalHl: Math.round((stockCervezasHl + stockNabsHl) * 100) / 100,
+    stockAguasHl,
+    stockUngHl,
+    stockTotalHl: Math.round((stockCervezasHl + stockAguasHl + stockUngHl) * 100) / 100,
     stockItems,
     stockPorDivision,
     objetivos,
@@ -500,14 +536,18 @@ export async function getGerencialData(
     diasHabilesTranscurridos,
     diasHabilesRestantes: diasHabilesRest,
     vpmCervezas,
-    vpmNabs,
+    vpmAguas,
+    vpmUng,
     diasPisoCervezas,
-    diasPisoNabs,
+    diasPisoAguas,
+    diasPisoUng,
     ingresos,
     ingresoCervezasHl,
-    ingresoNabsHl,
+    ingresoAguasHl,
+    ingresoUngHl,
     cumplimientoCervezas,
-    cumplimientoNabs,
+    cumplimientoAguas,
+    cumplimientoUng,
     ingresosPorSku,
     especiales,
     snapshots,

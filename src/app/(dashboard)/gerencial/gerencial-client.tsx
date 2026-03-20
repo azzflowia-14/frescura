@@ -14,6 +14,7 @@ import { DivisionBadge } from "@/components/division-badge"
 import {
   Beer,
   GlassWater,
+  Droplets,
   CalendarDays,
   Target,
   RefreshCw,
@@ -72,18 +73,21 @@ const MESES = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ]
 
+type CatKey = "cervezas" | "aguas" | "ung"
+
 export function GerencialClient() {
   const [data, setData] = useState<GerencialData | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [stockModal, setStockModal] = useState<"cervezas" | "nabs" | null>(null)
+  const [stockModal, setStockModal] = useState<CatKey | null>(null)
   const [showObjModal, setShowObjModal] = useState(false)
   const [objCervezas, setObjCervezas] = useState("")
-  const [objNabs, setObjNabs] = useState("")
+  const [objAguas, setObjAguas] = useState("")
+  const [objUng, setObjUng] = useState("")
   const [selMes, setSelMes] = useState(new Date().getMonth() + 1)
   const [selAnio, setSelAnio] = useState(new Date().getFullYear())
-  const [ingModal, setIngModal] = useState<"cervezas" | "nabs" | null>(null)
-  const [marcaTipo, setMarcaTipo] = useState<"cervezas" | "nabs">("nabs")
+  const [ingModal, setIngModal] = useState<CatKey | null>(null)
+  const [marcaTipo, setMarcaTipo] = useState<CatKey>("cervezas")
   const [marcaSel, setMarcaSel] = useState<string>("")
 
   const load = useCallback(async (mes?: number, anio?: number) => {
@@ -92,7 +96,8 @@ export function GerencialClient() {
       const d = await getGerencialData(mes ?? selMes, anio ?? selAnio)
       setData(d)
       setObjCervezas(String(d.objetivos.cervezas || ""))
-      setObjNabs(String(d.objetivos.nabs || ""))
+      setObjAguas(String(d.objetivos.aguas || ""))
+      setObjUng(String(d.objetivos.ung || ""))
     } finally {
       setLoading(false)
     }
@@ -116,7 +121,7 @@ export function GerencialClient() {
     if (!data) return
     setSaving(true)
     try {
-      await saveObjetivos(data.mes, data.anio, Number(objCervezas) || 0, Number(objNabs) || 0)
+      await saveObjetivos(data.mes, data.anio, Number(objCervezas) || 0, Number(objAguas) || 0, Number(objUng) || 0)
       await load(data.mes, data.anio)
       setShowObjModal(false)
     } finally {
@@ -141,14 +146,35 @@ export function GerencialClient() {
   const progCervezas = data.objetivos.cervezas > 0
     ? Math.min(100, Math.round((data.ingresoCervezasHl / data.objetivos.cervezas) * 100))
     : 0
-  const progNabs = data.objetivos.nabs > 0
-    ? Math.min(100, Math.round((data.ingresoNabsHl / data.objetivos.nabs) * 100))
+  const progAguas = data.objetivos.aguas > 0
+    ? Math.min(100, Math.round((data.ingresoAguasHl / data.objetivos.aguas) * 100))
+    : 0
+  const progUng = data.objetivos.ung > 0
+    ? Math.min(100, Math.round((data.ingresoUngHl / data.objetivos.ung) * 100))
     : 0
 
   // Pie data for stock by division (top 8)
   const pieData = data.stockPorDivision
     .filter((d) => d.division !== "NO APLICABLE" && d.hl > 0)
     .slice(0, 8)
+
+  // Helper for ingreso modal
+  function getIngresoTotal(cat: CatKey) {
+    if (cat === "cervezas") return data!.ingresoCervezasHl
+    if (cat === "aguas") return data!.ingresoAguasHl
+    return data!.ingresoUngHl
+  }
+  function getProgreso(cat: CatKey) {
+    if (cat === "cervezas") return progCervezas
+    if (cat === "aguas") return progAguas
+    return progUng
+  }
+  function getObjetivo(cat: CatKey) {
+    if (cat === "cervezas") return data!.objetivos.cervezas
+    if (cat === "aguas") return data!.objetivos.aguas
+    return data!.objetivos.ung
+  }
+  const CAT_LABELS: Record<CatKey, string> = { cervezas: "Cervezas", aguas: "Aguas", ung: "UNG" }
 
   return (
     <div className="space-y-6">
@@ -188,24 +214,33 @@ export function GerencialClient() {
         </div>
       </div>
 
-      {/* Fila 1: KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* Fila 1: KPIs — 6 cards: stock + piso x 3 categorías */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <button onClick={() => setStockModal("cervezas")} className="text-left">
           <KpiCard
             title="Stock Cervezas"
             value={`${fmtHl(data.stockCervezasHl)} HL`}
-            subtitle="Click para ver detalle"
+            subtitle="Click para detalle"
             icon={Beer}
             color="yellow"
           />
         </button>
-        <button onClick={() => setStockModal("nabs")} className="text-left">
+        <button onClick={() => setStockModal("aguas")} className="text-left">
           <KpiCard
-            title="Stock NABS"
-            value={`${fmtHl(data.stockNabsHl)} HL`}
-            subtitle="Click para ver detalle"
+            title="Stock Aguas"
+            value={`${fmtHl(data.stockAguasHl)} HL`}
+            subtitle="Click para detalle"
+            icon={Droplets}
+            color="cyan"
+          />
+        </button>
+        <button onClick={() => setStockModal("ung")} className="text-left">
+          <KpiCard
+            title="Stock UNG"
+            value={`${fmtHl(data.stockUngHl)} HL`}
+            subtitle="Click para detalle"
             icon={GlassWater}
-            color="blue"
+            color="purple"
           />
         </button>
         <KpiCard
@@ -216,22 +251,29 @@ export function GerencialClient() {
           color={data.diasPisoCervezas !== null && data.diasPisoCervezas < 10 ? "red" : "green"}
         />
         <KpiCard
-          title="Piso NABS"
-          value={`${fmtDias(data.diasPisoNabs)} días`}
-          subtitle={`VPM: ${fmtHl(data.vpmNabs)} HL/día`}
+          title="Piso Aguas"
+          value={`${fmtDias(data.diasPisoAguas)} días`}
+          subtitle={`VPM: ${fmtHl(data.vpmAguas)} HL/día`}
           icon={CalendarDays}
-          color={data.diasPisoNabs !== null && data.diasPisoNabs < 10 ? "red" : "green"}
+          color={data.diasPisoAguas !== null && data.diasPisoAguas < 10 ? "red" : "green"}
+        />
+        <KpiCard
+          title="Piso UNG"
+          value={`${fmtDias(data.diasPisoUng)} días`}
+          subtitle={`VPM: ${fmtHl(data.vpmUng)} HL/día`}
+          icon={CalendarDays}
+          color={data.diasPisoUng !== null && data.diasPisoUng < 10 ? "red" : "green"}
         />
       </div>
 
-      {/* Evolución diaria Días de Piso — Cervezas y NABS */}
+      {/* Evolución diaria Días de Piso — 3 gráficos */}
       {data.snapshots.length >= 2 && (
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid md:grid-cols-3 gap-4">
           <div className="bg-white rounded-xl border p-4">
             <h3 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-2">
               <Beer className="w-4 h-4 text-amber-500" /> Días de Piso — Cervezas
             </h3>
-            <ResponsiveContainer width="100%" height={280}>
+            <ResponsiveContainer width="100%" height={260}>
               <LineChart
                 data={data.snapshots}
                 margin={{ left: 5, right: 10, bottom: 20 }}
@@ -243,11 +285,11 @@ export function GerencialClient() {
                     const d = v.split("-")
                     return `${d[2]}/${d[1]}`
                   }}
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: 10 }}
                 />
                 <YAxis
-                  tick={{ fontSize: 11 }}
-                  label={{ value: "Días piso", angle: -90, position: "insideLeft", style: { fontSize: 11, fill: "#94a3b8" } }}
+                  tick={{ fontSize: 10 }}
+                  label={{ value: "Días", angle: -90, position: "insideLeft", style: { fontSize: 10, fill: "#94a3b8" } }}
                 />
                 <Tooltip
                   content={({ active, payload, label }) => {
@@ -257,7 +299,7 @@ export function GerencialClient() {
                     return (
                       <div className="bg-white border rounded-lg shadow-lg p-2.5 text-xs space-y-1">
                         <p className="font-medium text-slate-700">{d[2]}/{d[1]}/{d[0]}</p>
-                        <p className="text-amber-600">Días de Piso: <span className="font-semibold">{fmtDias(snap.diasPisoCervezas)} días</span></p>
+                        <p className="text-amber-600">Piso: <span className="font-semibold">{fmtDias(snap.diasPisoCervezas)} días</span></p>
                         <p className="text-slate-500">Stock: <span className="font-semibold">{fmtHl(snap.stockCervezasHl)} HL</span></p>
                       </div>
                     )
@@ -267,7 +309,7 @@ export function GerencialClient() {
                   y={10}
                   stroke="#ef4444"
                   strokeDasharray="3 3"
-                  label={{ value: "Mín 10d", position: "right", fontSize: 10, fill: "#ef4444" }}
+                  label={{ value: "Mín 10d", position: "right", fontSize: 9, fill: "#ef4444" }}
                 />
                 <Line
                   type="monotone"
@@ -275,8 +317,8 @@ export function GerencialClient() {
                   name="Días de Piso"
                   stroke="#f59e0b"
                   strokeWidth={2.5}
-                  dot={{ r: 4, fill: "#f59e0b", strokeWidth: 2, stroke: "#fff" }}
-                  activeDot={{ r: 6, fill: "#f59e0b", strokeWidth: 2, stroke: "#fff" }}
+                  dot={{ r: 3, fill: "#f59e0b", strokeWidth: 2, stroke: "#fff" }}
+                  activeDot={{ r: 5, fill: "#f59e0b", strokeWidth: 2, stroke: "#fff" }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -284,9 +326,9 @@ export function GerencialClient() {
 
           <div className="bg-white rounded-xl border p-4">
             <h3 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-2">
-              <GlassWater className="w-4 h-4 text-blue-500" /> Días de Piso — NABS
+              <Droplets className="w-4 h-4 text-cyan-500" /> Días de Piso — Aguas
             </h3>
-            <ResponsiveContainer width="100%" height={280}>
+            <ResponsiveContainer width="100%" height={260}>
               <LineChart
                 data={data.snapshots}
                 margin={{ left: 5, right: 10, bottom: 20 }}
@@ -298,11 +340,11 @@ export function GerencialClient() {
                     const d = v.split("-")
                     return `${d[2]}/${d[1]}`
                   }}
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: 10 }}
                 />
                 <YAxis
-                  tick={{ fontSize: 11 }}
-                  label={{ value: "Días piso", angle: -90, position: "insideLeft", style: { fontSize: 11, fill: "#94a3b8" } }}
+                  tick={{ fontSize: 10 }}
+                  label={{ value: "Días", angle: -90, position: "insideLeft", style: { fontSize: 10, fill: "#94a3b8" } }}
                 />
                 <Tooltip
                   content={({ active, payload, label }) => {
@@ -312,8 +354,8 @@ export function GerencialClient() {
                     return (
                       <div className="bg-white border rounded-lg shadow-lg p-2.5 text-xs space-y-1">
                         <p className="font-medium text-slate-700">{d[2]}/{d[1]}/{d[0]}</p>
-                        <p className="text-blue-600">Días de Piso: <span className="font-semibold">{fmtDias(snap.diasPisoNabs)} días</span></p>
-                        <p className="text-slate-500">Stock: <span className="font-semibold">{fmtHl(snap.stockNabsHl)} HL</span></p>
+                        <p className="text-cyan-600">Piso: <span className="font-semibold">{fmtDias(snap.diasPisoAguas)} días</span></p>
+                        <p className="text-slate-500">Stock: <span className="font-semibold">{fmtHl(snap.stockAguasHl)} HL</span></p>
                       </div>
                     )
                   }}
@@ -322,16 +364,71 @@ export function GerencialClient() {
                   y={10}
                   stroke="#ef4444"
                   strokeDasharray="3 3"
-                  label={{ value: "Mín 10d", position: "right", fontSize: 10, fill: "#ef4444" }}
+                  label={{ value: "Mín 10d", position: "right", fontSize: 9, fill: "#ef4444" }}
                 />
                 <Line
                   type="monotone"
-                  dataKey="diasPisoNabs"
+                  dataKey="diasPisoAguas"
                   name="Días de Piso"
-                  stroke="#3b82f6"
+                  stroke="#06b6d4"
                   strokeWidth={2.5}
-                  dot={{ r: 4, fill: "#3b82f6", strokeWidth: 2, stroke: "#fff" }}
-                  activeDot={{ r: 6, fill: "#3b82f6", strokeWidth: 2, stroke: "#fff" }}
+                  dot={{ r: 3, fill: "#06b6d4", strokeWidth: 2, stroke: "#fff" }}
+                  activeDot={{ r: 5, fill: "#06b6d4", strokeWidth: 2, stroke: "#fff" }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="bg-white rounded-xl border p-4">
+            <h3 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-2">
+              <GlassWater className="w-4 h-4 text-violet-500" /> Días de Piso — UNG
+            </h3>
+            <ResponsiveContainer width="100%" height={260}>
+              <LineChart
+                data={data.snapshots}
+                margin={{ left: 5, right: 10, bottom: 20 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="fecha"
+                  tickFormatter={(v) => {
+                    const d = v.split("-")
+                    return `${d[2]}/${d[1]}`
+                  }}
+                  tick={{ fontSize: 10 }}
+                />
+                <YAxis
+                  tick={{ fontSize: 10 }}
+                  label={{ value: "Días", angle: -90, position: "insideLeft", style: { fontSize: 10, fill: "#94a3b8" } }}
+                />
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null
+                    const snap = payload[0].payload as SnapshotDiario
+                    const d = String(label).split("-")
+                    return (
+                      <div className="bg-white border rounded-lg shadow-lg p-2.5 text-xs space-y-1">
+                        <p className="font-medium text-slate-700">{d[2]}/{d[1]}/{d[0]}</p>
+                        <p className="text-violet-600">Piso: <span className="font-semibold">{fmtDias(snap.diasPisoUng)} días</span></p>
+                        <p className="text-slate-500">Stock: <span className="font-semibold">{fmtHl(snap.stockUngHl)} HL</span></p>
+                      </div>
+                    )
+                  }}
+                />
+                <ReferenceLine
+                  y={10}
+                  stroke="#ef4444"
+                  strokeDasharray="3 3"
+                  label={{ value: "Mín 10d", position: "right", fontSize: 9, fill: "#ef4444" }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="diasPisoUng"
+                  name="Días de Piso"
+                  stroke="#8b5cf6"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, fill: "#8b5cf6", strokeWidth: 2, stroke: "#fff" }}
+                  activeDot={{ r: 5, fill: "#8b5cf6", strokeWidth: 2, stroke: "#fff" }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -345,7 +442,7 @@ export function GerencialClient() {
         </div>
       )}
 
-      {/* Fila 2: Objetivos */}
+      {/* Fila 2: Objetivos — 3 barras */}
       <div className="bg-white rounded-xl border p-4 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium text-slate-600 flex items-center gap-2">
@@ -364,7 +461,7 @@ export function GerencialClient() {
           </div>
         </div>
 
-        {data.objetivos.cervezas === 0 && data.objetivos.nabs === 0 ? (
+        {data.objetivos.cervezas === 0 && data.objetivos.aguas === 0 && data.objetivos.ung === 0 ? (
           <div className="text-center py-6">
             <p className="text-sm text-slate-400 mb-2">No hay objetivos cargados para este mes</p>
             <button
@@ -386,13 +483,23 @@ export function GerencialClient() {
                 clickable
               />
             </button>
-            <button className="w-full text-left" onClick={() => setIngModal("nabs")}>
+            <button className="w-full text-left" onClick={() => setIngModal("aguas")}>
               <ProgressRow
-                label="NABS"
-                current={data.ingresoNabsHl}
-                target={data.objetivos.nabs}
-                percent={progNabs}
-                color="blue"
+                label="Aguas"
+                current={data.ingresoAguasHl}
+                target={data.objetivos.aguas}
+                percent={progAguas}
+                color="cyan"
+                clickable
+              />
+            </button>
+            <button className="w-full text-left" onClick={() => setIngModal("ung")}>
+              <ProgressRow
+                label="UNG"
+                current={data.ingresoUngHl}
+                target={data.objetivos.ung}
+                percent={progUng}
+                color="violet"
                 clickable
               />
             </button>
@@ -419,13 +526,23 @@ export function GerencialClient() {
               />
             </div>
             <div>
-              <label className="text-sm text-slate-600">NABS (HL)</label>
+              <label className="text-sm text-slate-600">Aguas (HL)</label>
               <input
                 type="number"
-                value={objNabs}
-                onChange={(e) => setObjNabs(e.target.value)}
+                value={objAguas}
+                onChange={(e) => setObjAguas(e.target.value)}
                 className="w-full rounded-lg border px-3 py-2 text-sm mt-1"
-                placeholder="Ej: 5000"
+                placeholder="Ej: 3000"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-600">UNG (HL)</label>
+              <input
+                type="number"
+                value={objUng}
+                onChange={(e) => setObjUng(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm mt-1"
+                placeholder="Ej: 2000"
               />
             </div>
             <div className="flex gap-2 justify-end">
@@ -447,7 +564,7 @@ export function GerencialClient() {
         </div>
       )}
 
-      {/* Fila 3: Ingresos acumulados del mes */}
+      {/* Fila 3: Ingresos acumulados del mes — 3 líneas */}
       {data.ingresos.length > 0 && (
         <div className="bg-white rounded-xl border p-4">
           <h3 className="text-sm font-medium text-slate-600 mb-3">
@@ -465,13 +582,18 @@ export function GerencialClient() {
               <Tooltip
                 labelFormatter={(v) => { const d = String(v).split("-"); return `${d[2]}/${d[1]}/${d[0]}` }}
               />
-              <Line type="monotone" dataKey="acumCervezas" name="acumCervezas" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="acumNabs" name="acumNabs" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
+              <Legend />
+              <Line type="monotone" dataKey="acumCervezas" name="Cervezas" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="acumAguas" name="Aguas" stroke="#06b6d4" strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="acumUng" name="UNG" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} />
               {data.objetivos.cervezas > 0 && (
                 <ReferenceLine y={data.objetivos.cervezas} stroke="#f59e0b" strokeDasharray="5 5" label={{ value: `Obj Cerv: ${fmtHl(data.objetivos.cervezas)}`, position: "right", fontSize: 10 }} />
               )}
-              {data.objetivos.nabs > 0 && (
-                <ReferenceLine y={data.objetivos.nabs} stroke="#3b82f6" strokeDasharray="5 5" label={{ value: `Obj NABS: ${fmtHl(data.objetivos.nabs)}`, position: "right", fontSize: 10 }} />
+              {data.objetivos.aguas > 0 && (
+                <ReferenceLine y={data.objetivos.aguas} stroke="#06b6d4" strokeDasharray="5 5" label={{ value: `Obj Aguas: ${fmtHl(data.objetivos.aguas)}`, position: "right", fontSize: 10 }} />
+              )}
+              {data.objetivos.ung > 0 && (
+                <ReferenceLine y={data.objetivos.ung} stroke="#8b5cf6" strokeDasharray="5 5" label={{ value: `Obj UNG: ${fmtHl(data.objetivos.ung)}`, position: "right", fontSize: 10 }} />
               )}
             </LineChart>
           </ResponsiveContainer>
@@ -594,9 +716,7 @@ export function GerencialClient() {
                     <td className="p-2 text-right font-mono text-xs">{s.bultos.toLocaleString()}</td>
                     <td className="p-2 text-right font-mono text-xs font-semibold">{fmtHl(s.hl)}</td>
                     <td className="p-2">
-                      <span className={`text-xs px-1.5 py-0.5 rounded ${s.clasificacion === "cervezas" ? "bg-amber-100 text-amber-700" : s.clasificacion === "nabs" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}`}>
-                        {s.clasificacion === "cervezas" ? "Cervezas" : s.clasificacion === "nabs" ? "NABS" : "Otro"}
-                      </span>
+                      <ClasifBadge clasif={s.clasificacion} />
                     </td>
                   </tr>
                 ))}
@@ -615,7 +735,7 @@ export function GerencialClient() {
           <div className="bg-white rounded-xl p-6 w-full max-w-2xl shadow-xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">
-                {stockModal === "cervezas" ? "Stock Cervezas" : "Stock NABS"} — Detalle por SKU
+                Stock {CAT_LABELS[stockModal]} — Detalle por SKU
               </h3>
               <button onClick={() => setStockModal(null)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
             </div>
@@ -649,7 +769,11 @@ export function GerencialClient() {
                       {data.stockItems.filter((s) => s.clasificacion === stockModal).reduce((sum, s) => sum + s.bultos, 0).toLocaleString()}
                     </td>
                     <td className="p-2 text-right font-mono text-xs">
-                      {fmtHl(stockModal === "cervezas" ? data.stockCervezasHl : data.stockNabsHl)}
+                      {fmtHl(
+                        stockModal === "cervezas" ? data.stockCervezasHl
+                          : stockModal === "aguas" ? data.stockAguasHl
+                          : data.stockUngHl
+                      )}
                     </td>
                   </tr>
                 </tfoot>
@@ -666,12 +790,11 @@ export function GerencialClient() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-lg font-semibold">
-                  Ingresos {ingModal === "cervezas" ? "Cervezas" : "NABS"} — {mesLabel}
+                  Ingresos {CAT_LABELS[ingModal]} — {mesLabel}
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Detalle por SKU · {fmtHl(ingModal === "cervezas" ? data.ingresoCervezasHl : data.ingresoNabsHl)} HL totales
-                  {ingModal === "cervezas" && data.objetivos.cervezas > 0 && ` · ${progCervezas}% del objetivo`}
-                  {ingModal === "nabs" && data.objetivos.nabs > 0 && ` · ${progNabs}% del objetivo`}
+                  Detalle por SKU · {fmtHl(getIngresoTotal(ingModal))} HL totales
+                  {getObjetivo(ingModal) > 0 && ` · ${getProgreso(ingModal)}% del objetivo`}
                 </p>
               </div>
               <button onClick={() => setIngModal(null)} className="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
@@ -692,7 +815,7 @@ export function GerencialClient() {
                   {data.ingresosPorSku
                     .filter((s) => s.clasificacion === ingModal)
                     .map((s, i) => {
-                      const totalHl = ingModal === "cervezas" ? data.ingresoCervezasHl : data.ingresoNabsHl
+                      const totalHl = getIngresoTotal(ingModal!)
                       const pct = totalHl > 0 ? Math.round((s.hl / totalHl) * 1000) / 10 : 0
                       return (
                         <tr key={s.articulo} className="hover:bg-slate-50">
@@ -716,7 +839,7 @@ export function GerencialClient() {
                         .toLocaleString("es-AR")}
                     </td>
                     <td className="p-2 text-right font-mono text-xs">
-                      {fmtHl(ingModal === "cervezas" ? data.ingresoCervezasHl : data.ingresoNabsHl)}
+                      {fmtHl(getIngresoTotal(ingModal!))}
                     </td>
                     <td className="p-2 text-right text-xs">100%</td>
                   </tr>
@@ -727,6 +850,26 @@ export function GerencialClient() {
         </div>
       )}
     </div>
+  )
+}
+
+function ClasifBadge({ clasif }: { clasif: string }) {
+  const styles: Record<string, string> = {
+    cervezas: "bg-amber-100 text-amber-700",
+    aguas: "bg-cyan-100 text-cyan-700",
+    ung: "bg-violet-100 text-violet-700",
+    otro: "bg-slate-100 text-slate-500",
+  }
+  const labels: Record<string, string> = {
+    cervezas: "Cervezas",
+    aguas: "Aguas",
+    ung: "UNG",
+    otro: "Otro",
+  }
+  return (
+    <span className={`text-xs px-1.5 py-0.5 rounded ${styles[clasif] || styles.otro}`}>
+      {labels[clasif] || clasif}
+    </span>
   )
 }
 
@@ -742,11 +885,11 @@ function ProgressRow({
   current: number
   target: number
   percent: number
-  color: "amber" | "blue"
+  color: "amber" | "cyan" | "violet"
   clickable?: boolean
 }) {
-  const bg = color === "amber" ? "bg-amber-500" : "bg-blue-500"
-  const track = color === "amber" ? "bg-amber-100" : "bg-blue-100"
+  const bgMap = { amber: "bg-amber-500", cyan: "bg-cyan-500", violet: "bg-violet-500" }
+  const trackMap = { amber: "bg-amber-100", cyan: "bg-cyan-100", violet: "bg-violet-100" }
   return (
     <div className={`space-y-1 ${clickable ? "hover:bg-slate-50 rounded-lg p-1.5 -m-1.5 transition-colors cursor-pointer" : ""}`}>
       <div className="flex items-center justify-between text-sm">
@@ -758,8 +901,8 @@ function ProgressRow({
           {fmtHl(current)} / {fmtHl(target)} HL ({percent}%)
         </span>
       </div>
-      <div className={`h-3 rounded-full ${track} overflow-hidden`}>
-        <div className={`h-full rounded-full ${bg} transition-all`} style={{ width: `${percent}%` }} />
+      <div className={`h-3 rounded-full ${trackMap[color]} overflow-hidden`}>
+        <div className={`h-full rounded-full ${bgMap[color]} transition-all`} style={{ width: `${percent}%` }} />
       </div>
     </div>
   )
@@ -773,9 +916,9 @@ function StockPorMarca({
   onMarcaChange,
 }: {
   stockItems: GerencialData["stockItems"]
-  tipo: "cervezas" | "nabs"
+  tipo: CatKey
   marcaSel: string
-  onTipoChange: (t: "cervezas" | "nabs") => void
+  onTipoChange: (t: CatKey) => void
   onMarcaChange: (m: string) => void
 }) {
   // Get items for selected tipo
@@ -803,6 +946,12 @@ function StockPorMarca({
   const totalVpdMarca = skus.reduce((sum, s) => sum + s.vpd7Hl, 0)
   const pisoMarca = totalVpdMarca > 0 ? Math.round((totalHlMarca / totalVpdMarca) * 10) / 10 : null
 
+  const BTN_STYLES: Record<CatKey, string> = {
+    cervezas: "bg-amber-500 text-white",
+    aguas: "bg-cyan-500 text-white",
+    ung: "bg-violet-500 text-white",
+  }
+
   return (
     <div className="bg-white rounded-xl border p-4">
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
@@ -811,18 +960,15 @@ function StockPorMarca({
         </h3>
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg border overflow-hidden text-sm">
-            <button
-              onClick={() => onTipoChange("cervezas")}
-              className={`px-3 py-1.5 transition-colors ${tipo === "cervezas" ? "bg-amber-500 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-            >
-              Cervezas
-            </button>
-            <button
-              onClick={() => onTipoChange("nabs")}
-              className={`px-3 py-1.5 transition-colors ${tipo === "nabs" ? "bg-blue-500 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-            >
-              NABS
-            </button>
+            {(["cervezas", "aguas", "ung"] as CatKey[]).map((t) => (
+              <button
+                key={t}
+                onClick={() => onTipoChange(t)}
+                className={`px-3 py-1.5 transition-colors ${tipo === t ? BTN_STYLES[t] : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              >
+                {t === "cervezas" ? "Cervezas" : t === "aguas" ? "Aguas" : "UNG"}
+              </button>
+            ))}
           </div>
           <select
             value={marca}
