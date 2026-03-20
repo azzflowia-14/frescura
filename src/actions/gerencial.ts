@@ -1,8 +1,6 @@
 "use server"
 
-import { query } from "@/lib/db"
 import { getVpdChess } from "@/actions/vpd-chess"
-import { getChessStock } from "@/lib/chess"
 import { loadKardexMes } from "@/lib/kardex"
 import {
   getSkuInfo,
@@ -199,34 +197,16 @@ export async function getGerencialData(
   const m = mes ?? hoy.getMonth() + 1
   const a = anio ?? hoy.getFullYear()
 
-  // Date range for current month
-  const mesStr = String(m).padStart(2, "0")
-  const fechaDesde = `${a}-${mesStr}-01`
-  const siguienteMes = m === 12 ? `${a + 1}-01-01` : `${a}-${String(m + 1).padStart(2, "0")}-01`
-
-  // Try kardex first (Excel upload), fallback to Chess+WMS
+  // Kardex (Excel Chess) — única fuente de stock e ingresos
   const kardexData = loadKardexMes(m, a)
 
-  const [chessStock, vpd7, objetivos, ingresosRawWms] = await Promise.all([
-    kardexData ? Promise.resolve([]) : getChessStock(),
+  const [vpd7, objetivos] = await Promise.all([
     getVpdChess(7),
     getObjetivos(m, a),
-    kardexData
-      ? Promise.resolve([])
-      : query<{ fecha: string; art: string; bultos: number }>(`
-        SELECT CONVERT(varchar, c.PltFchIngreso, 23) as fecha,
-          RTRIM(d.ArtCod) as art,
-          SUM(d.PltPUBQty) as bultos
-        FROM PLTCBC c
-        INNER JOIN PLTDTL d ON RTRIM(c.PltCod) = RTRIM(d.PltCod)
-        WHERE c.PltFchIngreso >= @fechaDesde AND c.PltFchIngreso < @siguienteMes
-        GROUP BY CONVERT(varchar, c.PltFchIngreso, 23), d.ArtCod
-        ORDER BY fecha
-      `, { fechaDesde, siguienteMes }),
   ])
 
-  // Ingresos: from kardex (REMITO + REM.CONSIG.) or WMS fallback
-  let ingresosRaw: { fecha: string; art: string; bultos: number }[]
+  // Ingresos: from kardex (REMITO + REM.CONSIG.)
+  const ingresosRaw: { fecha: string; art: string; bultos: number }[] = []
   if (kardexData) {
     const ingMap = new Map<string, number>()
     for (const mov of kardexData.movimientos) {
@@ -234,35 +214,19 @@ export async function getGerencialData(
       const key = `${mov.fecha}|${mov.codigo}`
       ingMap.set(key, (ingMap.get(key) || 0) + Math.abs(mov.movBultos))
     }
-    ingresosRaw = [...ingMap.entries()].map(([key, bultos]) => {
+    for (const [key, bultos] of ingMap) {
       const [fecha, art] = key.split("|")
-      return { fecha, art, bultos }
-    })
-  } else {
-    ingresosRaw = ingresosRawWms
+      ingresosRaw.push({ fecha, art, bultos })
+    }
   }
 
-  // Aggregate stock by article
+  // Aggregate stock by article (solo Kardex)
   const artAgg = new Map<string, { descripcion: string; bultos: number }>()
   if (kardexData) {
     for (const r of kardexData.resumenArticulos) {
       if (!esMercaderia(r.codigo)) continue
       if (r.saldoFinal <= 0) continue
       artAgg.set(r.codigo, { descripcion: r.descripcion, bultos: r.saldoFinal })
-    }
-  } else {
-    for (const row of chessStock) {
-      const art = String(row.idArticulo).trim()
-      if (!art) continue
-      if (!esMercaderia(art)) continue
-      const existing = artAgg.get(art)
-      const bultos = Number(row.cantBultos) || 0
-      if (bultos <= 0) continue
-      if (existing) {
-        existing.bultos += bultos
-      } else {
-        artAgg.set(art, { descripcion: String(row.dsArticulo || "").trim(), bultos })
-      }
     }
   }
 
@@ -505,21 +469,8 @@ export async function getGerencialData(
       })
     }
   } else {
-    // Fallback: snapshots del JSON legacy + auto-save hoy
-    const hoyStr = hoy.toISOString().slice(0, 10)
-    const esMesActual = m === hoy.getMonth() + 1 && a === hoy.getFullYear()
-    if (esMesActual) {
-      saveSnapshot({
-        fecha: hoyStr,
-        stockCervezasHl,
-        stockAguasHl,
-        stockUngHl,
-        diasPisoCervezas,
-        diasPisoAguas,
-        diasPisoUng,
-      })
-    }
-    snapshots = readSnapshots()
+    // Sin Kardex cargado → sin snapshots
+    snapshots = []
   }
 
   return {
