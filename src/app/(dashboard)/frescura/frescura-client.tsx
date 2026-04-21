@@ -493,8 +493,8 @@ function SkuDetailModal({ r, vpd, diasPiso, precioUnit, valorizado }: {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <MiniKpi
           label="Dias p/ vencimiento"
-          value={String(r.diasRestantes)}
-          sub={formatDate(r.vencimientoProximo)}
+          value={formatDate(r.vencimientoProximo)}
+          sub={`${r.diasRestantes} dias`}
           color={diasColor(r.diasRestantes)}
         />
         <MiniKpi
