@@ -461,6 +461,11 @@ function SkuDetailModal({ r, vpd, diasPiso, precioUnit, valorizado }: {
 }) {
   const semaforo = calcSemaforo(diasPiso, r.diasRestantes)
 
+  // Bultos/unidades del vencimiento más próximo (lo que está en riesgo)
+  const bultosProx = r.bultosProxVenc ?? r.bultosTotal
+  const unidadesProx = r.unidadesProxVenc ?? r.unidadesTotal
+  const valorizadoProx = precioUnit !== null ? bultosProx * precioUnit : null
+
   return (
     <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
       <DialogHeader>
@@ -493,9 +498,9 @@ function SkuDetailModal({ r, vpd, diasPiso, precioUnit, valorizado }: {
           color={diasColor(r.diasRestantes)}
         />
         <MiniKpi
-          label="Bultos total"
-          value={fmtNum(r.bultosTotal)}
-          sub={`${fmtNum(r.unidadesTotal)} unid. (${r.unidadesPorBulto > 1 ? r.unidadesPorBulto : "1?"} ud/blt)`}
+          label="Bultos próx. venc."
+          value={fmtNum(bultosProx)}
+          sub={`${fmtNum(unidadesProx)} unid. — Total: ${fmtNum(r.bultosTotal)} blt`}
         />
         <MiniKpi
           label="VPD"
@@ -515,20 +520,23 @@ function SkuDetailModal({ r, vpd, diasPiso, precioUnit, valorizado }: {
         <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-purple-500 font-medium">Valorizado</p>
-              <p className="text-2xl font-bold text-purple-700">{valorizado !== null ? fmtMoney(valorizado) : "-"}</p>
+              <p className="text-xs text-purple-500 font-medium">Valorizado en riesgo</p>
+              <p className="text-2xl font-bold text-purple-700">{valorizadoProx !== null ? fmtMoney(valorizadoProx) : "-"}</p>
+              {valorizado !== null && valorizado !== valorizadoProx && (
+                <p className="text-xs text-purple-400 mt-0.5">Total stock: {fmtMoney(valorizado)}</p>
+              )}
             </div>
             <div className="text-right">
               <p className="text-xs text-purple-400">Precio por bulto</p>
               <p className="text-lg font-semibold text-purple-600">{fmtMoney(precioUnit)}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-purple-400">Bultos</p>
-              <p className="text-lg font-semibold text-slate-700">{fmtNum(r.bultosTotal)}</p>
+              <p className="text-xs text-purple-400">Bultos próx. venc.</p>
+              <p className="text-lg font-semibold text-slate-700">{fmtNum(bultosProx)}</p>
             </div>
           </div>
           {semaforo === "rojo" && (
-            <p className="text-sm text-red-600 font-bold mt-2">NO LLEGA A VENDER - Perdida potencial: {valorizado !== null ? fmtMoney(valorizado) : "-"}</p>
+            <p className="text-sm text-red-600 font-bold mt-2">NO LLEGA A VENDER - Perdida potencial: {valorizadoProx !== null ? fmtMoney(valorizadoProx) : "-"}</p>
           )}
         </div>
       )}
