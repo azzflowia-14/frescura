@@ -140,6 +140,12 @@ export function FrescuraClient() {
     return r.bultosTotal * p
   }
 
+  function getValorizadoProxVenc(r: FrescuraResumen): number | null {
+    const p = precios[r.articulo]
+    if (!p || p <= 0) return null
+    return r.bultosProxVenc * p
+  }
+
   function getPrecioUnit(articulo: string): number | null {
     const p = precios[articulo]
     return p && p > 0 ? p : null
@@ -379,6 +385,7 @@ export function FrescuraClient() {
                       <TableHead className="w-24">Estado</TableHead>
                       <TableHead>Articulo</TableHead>
                       <TableHead className="max-w-[280px]">Descripcion</TableHead>
+                      <TableHead className="text-center">Vencimiento</TableHead>
                       <TableHead className="text-center">Dias</TableHead>
                       <TableHead className="text-right">Bultos</TableHead>
                       {preciosSKUs > 0 && <TableHead className="text-right">Valorizado</TableHead>}
@@ -388,7 +395,7 @@ export function FrescuraClient() {
                     {filtered.map((r, i) => {
                       const diasPiso = getDiasDePiso(r)
                       const semaforo = calcSemaforo(diasPiso, r.diasRestantes)
-                      const val = getValorizado(r)
+                      const val = getValorizadoProxVenc(r)
 
                       return (
                         <TableRow
@@ -403,10 +410,11 @@ export function FrescuraClient() {
                           <TableCell><StatusBadge dias={r.diasRestantes} /></TableCell>
                           <TableCell className="font-mono text-sm text-slate-800 font-medium">{r.articulo}</TableCell>
                           <TableCell className="text-sm max-w-[280px] truncate text-slate-600">{r.descripcion}</TableCell>
+                          <TableCell className="text-center text-sm font-mono text-slate-600">{formatDate(r.vencimientoProximo)}</TableCell>
                           <TableCell className="text-center">
                             <span className={`font-bold text-lg ${diasColor(r.diasRestantes)}`}>{r.diasRestantes}</span>
                           </TableCell>
-                          <TableCell className="text-right font-semibold text-sm text-slate-700 tabular-nums">{fmtNum(r.bultosTotal)}</TableCell>
+                          <TableCell className="text-right font-semibold text-sm text-slate-700 tabular-nums">{fmtNum(r.bultosProxVenc)}</TableCell>
                           {preciosSKUs > 0 && (
                             <TableCell className="text-right text-sm tabular-nums">
                               {val !== null ? (
@@ -421,7 +429,7 @@ export function FrescuraClient() {
                     })}
                     {filtered.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={preciosSKUs > 0 ? 8 : 7} className="text-center py-8 text-slate-400">
+                        <TableCell colSpan={preciosSKUs > 0 ? 9 : 8} className="text-center py-8 text-slate-400">
                           No se encontraron productos
                         </TableCell>
                       </TableRow>
